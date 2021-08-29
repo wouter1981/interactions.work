@@ -1,3 +1,7 @@
 [submodule "frontend"]
 	path = frontend
 	url = git@github.com:wouter1981/interactions.work.frontend.git
+
+[submodule "profile.service"]
+	path = profile.service
+	url = git@github.com:wouter1981/interactions.work.profile.service.git

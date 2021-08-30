@@ -5,10 +5,10 @@
             "name": "Frontend (web)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/frontend/bin/Debug/net5.0/frontend.dll",
+            "preLaunchTask": "build-frontend",
+            "program": "${workspaceFolder}/frontend/src/bin/Debug/net5.0/frontend.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/frontend",
+            "cwd": "${workspaceFolder}/frontend/src/",
             "stopAtEntry": false,
             "serverReadyAction": {
                 "action": "openExternally",
@@ -18,7 +18,24 @@
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
             "sourceFileMap": {
-                "/Views": "${workspaceFolder}/frontend/client-app/src"
+                "/Views": "${workspaceFolder}/frontend/src/client-app/src"
+            }
+        },
+        {
+            "name": "Profile Service (web)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-profile.service",
+            "program": "${workspaceFolder}/profile.service/src/bin/Debug/net5.0/profile.service.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/profile.service/src",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
             }
         },
         {

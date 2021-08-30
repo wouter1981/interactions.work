@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30114.105
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "frontend", "frontend\frontend.csproj", "{EEAD5697-59BE-448E-8AD3-D8408DE8F20D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "frontend", "frontend\src\frontend.csproj", "{EEAD5697-59BE-448E-8AD3-D8408DE8F20D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "frontend.tests", "frontend.tests\frontend.tests.csproj", "{1D98394B-B940-4D33-9026-27677C0C7C07}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "frontend.tests", "frontend\test\frontend.tests\frontend.tests.csproj", "{1D98394B-B940-4D33-9026-27677C0C7C07}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "profile.service", "profile.service\profile.service.csproj", "{4FE16096-0C73-4AC4-82CC-426209D682C9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "profile.service", "profile.service\src\profile.service.csproj", "{4FE16096-0C73-4AC4-82CC-426209D682C9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

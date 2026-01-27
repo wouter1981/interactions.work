@@ -1,0 +1,12 @@
+# flutter_rust_bridge configuration
+# https://cjycode.com/flutter_rust_bridge/
+
+rust_input: rust/ffi/src/api.rs
+dart_output: flutter/lib/src/rust
+
+# Use full_dep mode for simpler integration
+full_dep_files:
+  dart_root: flutter
+
+# Rust crate settings
+rust_crate_dir: rust/ffi

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "tui"]
+members = ["core", "tui", "ffi"]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,6 +24,9 @@ rand = "0.8"
 # TUI dependencies
 ratatui = "0.29"
 crossterm = "0.28"
+
+# FFI bridge
+flutter_rust_bridge = "=2.0.0"
 
 # Testing
 tempfile = "3"

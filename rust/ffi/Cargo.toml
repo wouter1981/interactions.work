@@ -1,0 +1,16 @@
+[package]
+name = "interactions-ffi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "FFI bindings for interactions-core, for use with Flutter"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+interactions-core = { path = "../core" }
+flutter_rust_bridge.workspace = true
+chrono.workspace = true
+serde_yaml.workspace = true

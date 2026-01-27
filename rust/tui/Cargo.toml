@@ -1,0 +1,18 @@
+[package]
+name = "interactions-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Terminal UI for interactions.work"
+
+[[bin]]
+name = "interactions"
+path = "src/main.rs"
+
+[dependencies]
+interactions-core = { path = "../core" }
+ratatui.workspace = true
+crossterm.workspace = true
+serde.workspace = true
+thiserror.workspace = true

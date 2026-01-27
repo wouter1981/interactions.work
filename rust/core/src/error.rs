@@ -25,4 +25,10 @@ pub enum Error {
 
     #[error("Storage error: {0}")]
     Storage(String),
+
+    #[error("Authentication failed: {0}")]
+    AuthFailed(String),
+
+    #[error("Credentials not found for: {0}")]
+    CredentialsNotFound(String),
 }

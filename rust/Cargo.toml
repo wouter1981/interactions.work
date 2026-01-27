@@ -16,6 +16,11 @@ serde_yaml = "0.9"
 thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 
+# Authentication
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+
 # TUI dependencies
 ratatui = "0.29"
 crossterm = "0.28"

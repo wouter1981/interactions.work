@@ -11,6 +11,9 @@ serde.workspace = true
 serde_yaml.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
+sha2.workspace = true
+hex.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["core", "tui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["interactions.work contributors"]
+license = "MIT"
+repository = "https://github.com/wouter1981/interactions.work"
+
+[workspace.dependencies]
+# Shared dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
+
+# TUI dependencies
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Testing
+tempfile = "3"

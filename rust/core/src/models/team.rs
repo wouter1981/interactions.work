@@ -52,13 +52,25 @@ impl Team {
         self
     }
 
-    /// Add a leader to the team
-    pub fn add_leader(&mut self, email: impl Into<String>) {
+    /// Add a leader to the team (builder pattern)
+    pub fn add_leader(mut self, email: impl Into<String>) -> Self {
+        self.leaders.push(email.into());
+        self
+    }
+
+    /// Add a member to the team (builder pattern)
+    pub fn add_member(mut self, email: impl Into<String>) -> Self {
+        self.members.push(email.into());
+        self
+    }
+
+    /// Add a leader to the team (mutable)
+    pub fn push_leader(&mut self, email: impl Into<String>) {
         self.leaders.push(email.into());
     }
 
-    /// Add a member to the team
-    pub fn add_member(&mut self, email: impl Into<String>) {
+    /// Add a member to the team (mutable)
+    pub fn push_member(&mut self, email: impl Into<String>) {
         self.members.push(email.into());
     }
 
@@ -99,15 +111,25 @@ mod tests {
 
     #[test]
     fn test_team_membership() {
-        let mut team = Team::new("Engineering");
-        team.add_leader("leader@example.com");
-        team.add_member("member@example.com");
+        let team = Team::new("Engineering")
+            .add_leader("leader@example.com")
+            .add_member("member@example.com");
 
         assert!(team.is_leader("leader@example.com"));
         assert!(!team.is_leader("member@example.com"));
         assert!(team.is_member("leader@example.com")); // Leaders are also members
         assert!(team.is_member("member@example.com"));
         assert!(!team.is_member("stranger@example.com"));
+    }
+
+    #[test]
+    fn test_team_push_methods() {
+        let mut team = Team::new("Engineering");
+        team.push_leader("leader@example.com");
+        team.push_member("member@example.com");
+
+        assert!(team.is_leader("leader@example.com"));
+        assert!(team.is_member("member@example.com"));
     }
 
     #[test]

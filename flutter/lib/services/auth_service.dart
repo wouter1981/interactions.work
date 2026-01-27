@@ -10,14 +10,15 @@ import '../models/github_user.dart';
 ///
 /// To use this app, you need to:
 /// 1. Create a GitHub OAuth App at https://github.com/settings/developers
-/// 2. Set the callback URL to: interactions://callback
+/// 2. Set the callback URL to: interactions.work://callback
 /// 3. Replace these values with your app's credentials
 class GitHubOAuthConfig {
   // TODO: Replace with your GitHub OAuth App credentials
   // These should be stored securely in production (e.g., environment variables)
   static const String clientId = 'YOUR_GITHUB_CLIENT_ID';
   static const String clientSecret = 'YOUR_GITHUB_CLIENT_SECRET';
-  static const String redirectUri = 'interactions://callback';
+  static const String redirectUri = 'interactions.work://callback';
+  static const String callbackScheme = 'interactions.work';
   static const String scope = 'repo user read:org';
 }
 
@@ -57,7 +58,7 @@ class AuthService {
 
     final result = await FlutterWebAuth2.authenticate(
       url: authUrl.toString(),
-      callbackUrlScheme: 'interactions',
+      callbackUrlScheme: GitHubOAuthConfig.callbackScheme,
     );
 
     final code = Uri.parse(result).queryParameters['code'];

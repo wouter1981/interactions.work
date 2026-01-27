@@ -36,6 +36,9 @@ dependencies:
   # Git operations
   # Note: We'll use GitHub API for now, native git via FFI later
 
+  # Cryptography (matches Rust core's sha2)
+  crypto: ^3.0.3
+
   # Utilities
   path: ^1.9.0
   uuid: ^4.3.3

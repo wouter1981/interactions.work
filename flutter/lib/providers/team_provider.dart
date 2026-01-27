@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_writer/yaml_writer.dart';
 
+import '../models/credentials.dart';
 import '../models/team.dart';
 import '../models/github_repository.dart';
 import '../services/github_service.dart';
@@ -142,9 +143,18 @@ class TeamProvider extends ChangeNotifier {
     String? manifesto,
     String? vision,
     required String leaderEmail,
+    required String leaderName,
+    required String pincode,
   }) async {
     if (_gitHubService == null || _repository == null) {
       _error = 'Not connected to repository';
+      _state = TeamState.error;
+      notifyListeners();
+      return;
+    }
+
+    if (pincode.length < 4) {
+      _error = 'Pincode must be at least 4 characters';
       _state = TeamState.error;
       notifyListeners();
       return;
@@ -227,9 +237,35 @@ class TeamProvider extends ChangeNotifier {
         );
       }
 
+      // Create leader's member profile
+      final memberProfile = {
+        'email': leaderEmail,
+        'name': leaderName,
+      };
+
+      await _gitHubService!.createOrUpdateFile(
+        owner: owner,
+        repo: repo,
+        path: '.team/members/$leaderEmail/profile.yaml',
+        content: yamlWriter.write(memberProfile),
+        message: 'Initialize team: create leader profile',
+        branch: 'interactions',
+      );
+
+      // Create leader's credentials for TUI login
+      final credentials = MemberCredentials.create(leaderEmail, pincode);
+
+      await _gitHubService!.createOrUpdateFile(
+        owner: owner,
+        repo: repo,
+        path: '.team/members/$leaderEmail/credentials.yaml',
+        content: yamlWriter.write(credentials.toYaml()),
+        message: 'Initialize team: create leader credentials',
+        branch: 'interactions',
+      );
+
       // Create placeholder directories with .gitkeep
       final directories = [
-        '.team/members',
         '.team/team/okrs',
         '.team/team/interactions',
         '.team/team/retrospectives',

@@ -2,7 +2,7 @@
 //!
 //! Handles the .team/ and .personal/ directory structures.
 
-use crate::{Result, Team};
+use crate::{auth::MemberCredentials, Error, Member, Result, Team, TeamConfig};
 use std::path::{Path, PathBuf};
 
 /// Paths for the team data storage
@@ -105,6 +105,132 @@ impl TeamStorage {
         std::fs::write(path, content)?;
         Ok(())
     }
+
+    /// Load team configuration
+    pub fn load_config(&self) -> Result<Option<TeamConfig>> {
+        let config_path = self.team_dir().join("config.yaml");
+        if !config_path.exists() {
+            return Ok(None);
+        }
+
+        let content = std::fs::read_to_string(&config_path)?;
+        let config: TeamConfig = serde_yaml::from_str(&content)?;
+        Ok(Some(config))
+    }
+
+    /// Save team configuration
+    pub fn save_config(&self, config: &TeamConfig) -> Result<()> {
+        let config_path = self.team_dir().join("config.yaml");
+        let content = serde_yaml::to_string(config)?;
+        std::fs::write(config_path, content)?;
+        Ok(())
+    }
+
+    /// Get the path to a member's directory
+    pub fn member_dir(&self, email: &str) -> PathBuf {
+        self.team_dir().join("members").join(email)
+    }
+
+    /// Load a member's profile
+    pub fn load_member(&self, email: &str) -> Result<Option<Member>> {
+        let profile_path = self.member_dir(email).join("profile.yaml");
+        if !profile_path.exists() {
+            return Ok(None);
+        }
+
+        let content = std::fs::read_to_string(&profile_path)?;
+        let member: Member = serde_yaml::from_str(&content)?;
+        Ok(Some(member))
+    }
+
+    /// Save a member's profile
+    pub fn save_member(&self, member: &Member) -> Result<()> {
+        let member_dir = self.member_dir(&member.email);
+        std::fs::create_dir_all(&member_dir)?;
+
+        let profile_path = member_dir.join("profile.yaml");
+        let content = serde_yaml::to_string(member)?;
+        std::fs::write(profile_path, content)?;
+        Ok(())
+    }
+
+    /// Load a member's credentials
+    pub fn load_credentials(&self, email: &str) -> Result<Option<MemberCredentials>> {
+        let creds_path = self.member_dir(email).join("credentials.yaml");
+        if !creds_path.exists() {
+            return Ok(None);
+        }
+
+        let content = std::fs::read_to_string(&creds_path)?;
+        let creds: MemberCredentials = serde_yaml::from_str(&content)?;
+        Ok(Some(creds))
+    }
+
+    /// Save a member's credentials
+    pub fn save_credentials(&self, creds: &MemberCredentials) -> Result<()> {
+        let member_dir = self.member_dir(&creds.email);
+        std::fs::create_dir_all(&member_dir)?;
+
+        let creds_path = member_dir.join("credentials.yaml");
+        let content = serde_yaml::to_string(creds)?;
+        std::fs::write(creds_path, content)?;
+        Ok(())
+    }
+
+    /// Verify a member's pincode
+    pub fn verify_pincode(&self, email: &str, pincode: &str) -> Result<bool> {
+        let creds = self.load_credentials(email)?;
+        match creds {
+            Some(c) => Ok(c.verify(pincode)),
+            None => Err(Error::CredentialsNotFound(email.to_string())),
+        }
+    }
+
+    /// Initialize a new team with config, team info, and first member
+    pub fn initialize_team(
+        &self,
+        team: &Team,
+        config: &TeamConfig,
+        leader: &Member,
+        pincode: &str,
+    ) -> Result<()> {
+        // Initialize directory structure
+        self.initialize()?;
+
+        // Save config
+        self.save_config(config)?;
+
+        // Save team
+        self.save_team(team)?;
+
+        // Save leader profile
+        self.save_member(leader)?;
+
+        // Save leader credentials
+        let creds = MemberCredentials::new(&leader.email, pincode)?;
+        self.save_credentials(&creds)?;
+
+        Ok(())
+    }
+
+    /// List all members
+    pub fn list_members(&self) -> Result<Vec<String>> {
+        let members_dir = self.team_dir().join("members");
+        if !members_dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut members = vec![];
+        for entry in std::fs::read_dir(members_dir)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    members.push(name.to_string());
+                }
+            }
+        }
+        Ok(members)
+    }
 }
 
 #[cfg(test)]
@@ -167,5 +293,105 @@ mod tests {
 
         let loaded = storage.load_manifesto().unwrap().unwrap();
         assert_eq!(manifesto, loaded);
+    }
+
+    #[test]
+    fn test_config_save_load() {
+        let temp = TempDir::new().unwrap();
+        let storage = TeamStorage::new(temp.path());
+        storage.initialize().unwrap();
+
+        let config = TeamConfig::with_defaults();
+        storage.save_config(&config).unwrap();
+
+        let loaded = storage.load_config().unwrap().unwrap();
+        assert_eq!(config, loaded);
+    }
+
+    #[test]
+    fn test_member_save_load() {
+        let temp = TempDir::new().unwrap();
+        let storage = TeamStorage::new(temp.path());
+        storage.initialize().unwrap();
+
+        let member = Member::new("user@example.com")
+            .with_name("Test User")
+            .with_bio("A test user");
+
+        storage.save_member(&member).unwrap();
+        let loaded = storage.load_member("user@example.com").unwrap().unwrap();
+
+        assert_eq!(member.email, loaded.email);
+        assert_eq!(member.name, loaded.name);
+        assert_eq!(member.bio, loaded.bio);
+    }
+
+    #[test]
+    fn test_credentials_save_load_verify() {
+        let temp = TempDir::new().unwrap();
+        let storage = TeamStorage::new(temp.path());
+        storage.initialize().unwrap();
+
+        let creds = MemberCredentials::new("user@example.com", "mypin123").unwrap();
+        storage.save_credentials(&creds).unwrap();
+
+        // Verify using storage method
+        assert!(storage.verify_pincode("user@example.com", "mypin123").unwrap());
+        assert!(!storage.verify_pincode("user@example.com", "wrongpin").unwrap());
+    }
+
+    #[test]
+    fn test_credentials_not_found() {
+        let temp = TempDir::new().unwrap();
+        let storage = TeamStorage::new(temp.path());
+        storage.initialize().unwrap();
+
+        let result = storage.verify_pincode("nonexistent@example.com", "anypin");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_initialize_team() {
+        let temp = TempDir::new().unwrap();
+        let storage = TeamStorage::new(temp.path());
+
+        let team = Team::new("My Team")
+            .with_manifesto("We collaborate")
+            .add_leader("leader@example.com");
+
+        let config = TeamConfig::with_defaults();
+
+        let leader = Member::new("leader@example.com")
+            .with_name("Team Leader");
+
+        storage
+            .initialize_team(&team, &config, &leader, "leaderpin")
+            .unwrap();
+
+        // Verify everything was created
+        assert!(storage.is_initialized());
+        assert!(storage.load_team().unwrap().is_some());
+        assert!(storage.load_config().unwrap().is_some());
+        assert!(storage.load_member("leader@example.com").unwrap().is_some());
+        assert!(storage.verify_pincode("leader@example.com", "leaderpin").unwrap());
+    }
+
+    #[test]
+    fn test_list_members() {
+        let temp = TempDir::new().unwrap();
+        let storage = TeamStorage::new(temp.path());
+        storage.initialize().unwrap();
+
+        // Add some members
+        let member1 = Member::new("user1@example.com");
+        let member2 = Member::new("user2@example.com");
+
+        storage.save_member(&member1).unwrap();
+        storage.save_member(&member2).unwrap();
+
+        let members = storage.list_members().unwrap();
+        assert_eq!(members.len(), 2);
+        assert!(members.contains(&"user1@example.com".to_string()));
+        assert!(members.contains(&"user2@example.com".to_string()));
     }
 }

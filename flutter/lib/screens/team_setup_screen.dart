@@ -17,8 +17,12 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
   final _nameController = TextEditingController();
   final _manifestoController = TextEditingController();
   final _visionController = TextEditingController();
+  final _pincodeController = TextEditingController();
+  final _pincodeConfirmController = TextEditingController();
 
   int _currentStep = 0;
+  bool _obscurePincode = true;
+  bool _obscurePincodeConfirm = true;
 
   @override
   void initState() {
@@ -37,11 +41,52 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
     _nameController.dispose();
     _manifestoController.dispose();
     _visionController.dispose();
+    _pincodeController.dispose();
+    _pincodeConfirmController.dispose();
     super.dispose();
+  }
+
+  bool _validateCurrentStep() {
+    switch (_currentStep) {
+      case 0: // Team name
+        return _nameController.text.trim().isNotEmpty;
+      case 1: // Manifesto (optional)
+        return true;
+      case 2: // Vision (optional)
+        return true;
+      case 3: // Pincode
+        final pincode = _pincodeController.text;
+        final confirm = _pincodeConfirmController.text;
+        return pincode.length >= 4 && pincode == confirm;
+      default:
+        return true;
+    }
+  }
+
+  String? _getValidationError() {
+    if (_currentStep == 3) {
+      final pincode = _pincodeController.text;
+      final confirm = _pincodeConfirmController.text;
+      if (pincode.length < 4) {
+        return 'Pincode must be at least 4 characters';
+      }
+      if (pincode != confirm) {
+        return 'Pincodes do not match';
+      }
+    }
+    return null;
   }
 
   Future<void> _createTeam() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final error = _getValidationError();
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
       return;
     }
 
@@ -57,6 +102,8 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
           ? null
           : _visionController.text.trim(),
       leaderEmail: auth.user?.email ?? auth.user?.login ?? 'unknown',
+      leaderName: auth.user?.name ?? auth.user?.login ?? 'Team Leader',
+      pincode: _pincodeController.text,
     );
   }
 
@@ -86,7 +133,16 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                   child: Stepper(
                     currentStep: _currentStep,
                     onStepContinue: () {
-                      if (_currentStep < 2) {
+                      if (!_validateCurrentStep()) {
+                        final error = _getValidationError();
+                        if (error != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error)),
+                          );
+                        }
+                        return;
+                      }
+                      if (_currentStep < 3) {
                         setState(() => _currentStep++);
                       } else {
                         _createTeam();
@@ -105,7 +161,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                             FilledButton(
                               onPressed: details.onStepContinue,
                               child: Text(
-                                _currentStep == 2 ? 'Create Team' : 'Continue',
+                                _currentStep == 3 ? 'Create Team' : 'Continue',
                               ),
                             ),
                             if (_currentStep > 0) ...[
@@ -180,33 +236,14 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               maxLines: 5,
                             ),
                             const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer
-                                    .withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.lightbulb_outline,
-                                    size: 20,
-                                    color: colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'A manifesto defines the behavior norms and cultural principles your team strives for. '
-                                      'Members commit to following these principles.',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            _InfoBox(
+                              icon: Icons.lightbulb_outline,
+                              color: colorScheme.primary,
+                              backgroundColor: colorScheme.primaryContainer
+                                  .withOpacity(0.3),
+                              text:
+                                  'A manifesto defines the behavior norms and cultural principles your team strives for. '
+                                  'Members commit to following these principles.',
                             ),
                           ],
                         ),
@@ -235,33 +272,92 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               maxLines: 5,
                             ),
                             const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: colorScheme.secondaryContainer
-                                    .withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.flag_outlined,
-                                    size: 20,
-                                    color: colorScheme.secondary,
+                            _InfoBox(
+                              icon: Icons.flag_outlined,
+                              color: colorScheme.secondary,
+                              backgroundColor: colorScheme.secondaryContainer
+                                  .withOpacity(0.3),
+                              text:
+                                  'A vision describes what your team aims to achieve. '
+                                  'It provides direction and inspiration for team members.',
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Step 4: Pincode
+                      Step(
+                        title: const Text('Your Pincode'),
+                        subtitle:
+                            const Text('Secure access for terminal and mobile'),
+                        isActive: _currentStep >= 3,
+                        state: _currentStep > 3
+                            ? StepState.complete
+                            : StepState.indexed,
+                        content: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextFormField(
+                              controller: _pincodeController,
+                              decoration: InputDecoration(
+                                labelText: 'Pincode',
+                                hintText: 'At least 4 characters',
+                                border: const OutlineInputBorder(),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePincode
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'A vision describes what your team aims to achieve. '
-                                      'It provides direction and inspiration for team members.',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  onPressed: () {
+                                    setState(
+                                        () => _obscurePincode = !_obscurePincode);
+                                  },
+                                ),
                               ),
+                              obscureText: _obscurePincode,
+                              validator: (value) {
+                                if (value == null || value.length < 4) {
+                                  return 'Pincode must be at least 4 characters';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _pincodeConfirmController,
+                              decoration: InputDecoration(
+                                labelText: 'Confirm Pincode',
+                                border: const OutlineInputBorder(),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePincodeConfirm
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                  ),
+                                  onPressed: () {
+                                    setState(() => _obscurePincodeConfirm =
+                                        !_obscurePincodeConfirm);
+                                  },
+                                ),
+                              ),
+                              obscureText: _obscurePincodeConfirm,
+                              validator: (value) {
+                                if (value != _pincodeController.text) {
+                                  return 'Pincodes do not match';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            _InfoBox(
+                              icon: Icons.terminal,
+                              color: colorScheme.tertiary,
+                              backgroundColor: colorScheme.tertiaryContainer
+                                  .withOpacity(0.3),
+                              text:
+                                  'This pincode allows you to log in from the terminal (TUI) using your email and pincode. '
+                                  'It is stored securely in the repository and can be used across devices.',
                             ),
                             if (teamProvider.error != null) ...[
                               const SizedBox(height: 16),
@@ -304,6 +400,46 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+}
+
+class _InfoBox extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color backgroundColor;
+  final String text;
+
+  const _InfoBox({
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -360,13 +496,15 @@ class _CreatingTeamView extends StatelessWidget {
                 color: colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SetupStep(icon: Icons.check, label: 'Creating interactions branch'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   _SetupStep(icon: Icons.check, label: 'Adding team configuration'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
+                  _SetupStep(icon: Icons.check, label: 'Creating your profile'),
+                  SizedBox(height: 8),
                   _SetupStep(icon: Icons.hourglass_empty, label: 'Setting up directories'),
                 ],
               ),

@@ -191,6 +191,50 @@ class GitHubService {
     final List<dynamic> json = jsonDecode(response.body);
     return json.map((e) => e['name'] as String).toList();
   }
+
+  /// List directory contents in a repository
+  /// Returns a list of names (files and directories) in the given path
+  Future<List<DirectoryEntry>> listDirectory(
+    String owner,
+    String repo,
+    String path, {
+    String? ref,
+  }) async {
+    final uri = ref != null
+        ? Uri.parse('$_baseUrl/repos/$owner/$repo/contents/$path?ref=$ref')
+        : Uri.parse('$_baseUrl/repos/$owner/$repo/contents/$path');
+
+    final response = await http.get(uri, headers: _headers);
+
+    if (response.statusCode != 200) {
+      return [];
+    }
+
+    final json = jsonDecode(response.body);
+
+    // GitHub returns an array for directories
+    if (json is List) {
+      return json
+          .map((e) => DirectoryEntry(
+                name: e['name'] as String,
+                type: e['type'] as String,
+              ))
+          .toList();
+    }
+
+    return [];
+  }
+}
+
+/// Represents an entry in a directory listing
+class DirectoryEntry {
+  final String name;
+  final String type; // 'file' or 'dir'
+
+  DirectoryEntry({required this.name, required this.type});
+
+  bool get isDirectory => type == 'dir';
+  bool get isFile => type == 'file';
 }
 
 class GitHubException implements Exception {

@@ -135,7 +135,8 @@ class TeamProvider extends ChangeNotifier {
 
   Future<void> _loadTeamData(String owner, String repo, String branch) async {
     try {
-      // Load config
+      // Load config.yaml which contains both Team and TeamConfig data
+      // This matches how Rust core's load_team() works (reads from config.yaml)
       final configContent = await _gitHubService!.getFileContent(
         owner,
         repo,
@@ -146,22 +147,15 @@ class TeamProvider extends ChangeNotifier {
       if (configContent != null) {
         final configYaml = loadYaml(configContent) as YamlMap?;
         if (configYaml != null) {
-          _config = TeamConfig.fromYaml(Map<String, dynamic>.from(configYaml));
-        }
-      }
+          final yamlMap = Map<String, dynamic>.from(configYaml);
+          _config = TeamConfig.fromYaml(yamlMap);
 
-      // Load team info if exists
-      final teamContent = await _gitHubService!.getFileContent(
-        owner,
-        repo,
-        '.team/team.yaml',
-        ref: branch,
-      );
-
-      if (teamContent != null) {
-        final teamYaml = loadYaml(teamContent) as YamlMap?;
-        if (teamYaml != null) {
-          _team = Team.fromYaml(Map<String, dynamic>.from(teamYaml));
+          // config.yaml also contains Team data (name, leaders, members)
+          if (yamlMap.containsKey('name')) {
+            _team = Team.fromYaml(yamlMap);
+          } else {
+            _team = Team(name: repo);
+          }
         }
       } else {
         // Create default team from repo name
@@ -180,12 +174,14 @@ class TeamProvider extends ChangeNotifier {
     }
   }
 
-  /// Load member profiles for all team members.
+  /// Load member profiles for all team members (leaders + members).
+  /// Profiles are loaded from .team/members/{email}/profile.yaml
   Future<void> _loadMemberProfiles(
       String owner, String repo, String branch) async {
     if (_team == null) return;
 
-    final allEmails = [..._team!.leaders, ..._team!.members];
+    // Load profiles for all members listed in the team (leaders + members)
+    final allEmails = {..._team!.leaders, ..._team!.members};
 
     for (final email in allEmails) {
       try {
@@ -201,7 +197,11 @@ class TeamProvider extends ChangeNotifier {
           if (yaml != null) {
             _memberProfiles[email] =
                 Member.fromYaml(Map<String, dynamic>.from(yaml));
+          } else {
+            _memberProfiles[email] = Member(email: email);
           }
+        } else {
+          _memberProfiles[email] = Member(email: email);
         }
       } catch (_) {
         // Profile doesn't exist or couldn't be loaded, use default

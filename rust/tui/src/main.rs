@@ -9,8 +9,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use interactions_core::{Member, Team, TeamConfig, TeamStorage};
 use ratatui::prelude::*;
-use std::{env, io, process};
+use std::{env, io, io::Write, process};
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -27,6 +28,7 @@ fn main() -> io::Result<()> {
 /// Run a CLI command in headless mode
 fn run_command(args: &[String]) -> io::Result<()> {
     match args[0].as_str() {
+        "init" => run_init(),
         "publish" => {
             println!("Publishing content from .team/ sources...");
             // TODO: Implement publish command
@@ -86,6 +88,7 @@ USAGE:
     interactions <command>    Run a command in headless mode
 
 COMMANDS:
+    init        Initialize a new team in the current directory
     publish     Generate markdown files from .team/ sources
     lint        Validate .team/ structure (for PR checks)
     pulse       Send reminders via configured webhooks
@@ -96,6 +99,102 @@ COMMANDS:
 
 For more information, visit: https://github.com/wouter1981/interactions.work"#
     );
+}
+
+/// Prompt for user input with a message
+fn prompt(message: &str) -> io::Result<String> {
+    print!("{}", message);
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_string())
+}
+
+/// Prompt for password input (hidden)
+fn prompt_password(message: &str) -> io::Result<String> {
+    print!("{}", message);
+    io::stdout().flush()?;
+
+    // Disable echo for password input
+    let input = rpassword::read_password().unwrap_or_else(|_| {
+        // Fallback to regular input if rpassword fails
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).ok();
+        input.trim().to_string()
+    });
+
+    Ok(input)
+}
+
+/// Run the init command to create a new team
+fn run_init() -> io::Result<()> {
+    let storage = TeamStorage::new(".");
+
+    // Check if already initialized
+    if storage.is_initialized() {
+        println!("A team is already initialized in this directory.");
+        println!("The .team/ folder already exists.");
+        return Ok(());
+    }
+
+    println!("Welcome to interactions.work!");
+    println!("Let's set up your team.\n");
+
+    // Get team name
+    let team_name = prompt("Team name: ")?;
+    if team_name.is_empty() {
+        eprintln!("Error: Team name cannot be empty");
+        process::exit(1);
+    }
+
+    // Get leader email
+    let leader_email = prompt("Your email (team leader): ")?;
+    if leader_email.is_empty() || !leader_email.contains('@') {
+        eprintln!("Error: Please provide a valid email address");
+        process::exit(1);
+    }
+
+    // Get leader name (optional)
+    let leader_name = prompt("Your name (optional): ")?;
+
+    // Get pincode
+    println!("\nYour pincode is used to encrypt your private data.");
+    println!("It must be at least 4 characters.");
+    let pincode = prompt_password("Pincode: ")?;
+    if pincode.len() < 4 {
+        eprintln!("Error: Pincode must be at least 4 characters");
+        process::exit(1);
+    }
+
+    let pincode_confirm = prompt_password("Confirm pincode: ")?;
+    if pincode != pincode_confirm {
+        eprintln!("Error: Pincodes do not match");
+        process::exit(1);
+    }
+
+    // Create the team
+    let team = Team::new(&team_name).add_leader(&leader_email);
+    let config = TeamConfig::with_defaults();
+    let mut leader = Member::new(&leader_email);
+    if !leader_name.is_empty() {
+        leader = leader.with_name(&leader_name);
+    }
+
+    match storage.initialize_team(&team, &config, &leader, &pincode) {
+        Ok(()) => {
+            println!("\nTeam '{}' initialized successfully!", team_name);
+            println!("\nCreated:");
+            println!("  .team/     - Team data (commit to git)");
+            println!("  .personal/ - Your private data (gitignored)");
+            println!("\nRun 'interactions' to launch the TUI.");
+        }
+        Err(e) => {
+            eprintln!("Error initializing team: {}", e);
+            process::exit(1);
+        }
+    }
+
+    Ok(())
 }
 
 /// Run the interactive TUI

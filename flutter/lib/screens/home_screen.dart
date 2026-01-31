@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/interaction_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/team_provider.dart';
+import 'give_kudos_screen.dart';
+import 'give_feedback_screen.dart';
+import 'interactions_screen.dart';
 import 'team_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,6 +33,14 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_selectedIndex == 1) {
       return Scaffold(
         body: const TeamScreen(),
+        bottomNavigationBar: _buildNavigationBar(context),
+      );
+    }
+
+    // Show InteractionsScreen when Activity tab is selected
+    if (_selectedIndex == 3) {
+      return Scaffold(
+        body: const InteractionsScreen(),
         bottomNavigationBar: _buildNavigationBar(context),
       );
     }
@@ -144,9 +157,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Give Kudos',
                     color: colorScheme.primary,
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Kudos feature coming soon!')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const GiveKudosScreen()),
                       );
                     },
                   ),
@@ -155,12 +169,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: _QuickActionCard(
                     icon: Icons.feedback_outlined,
-                    label: 'Request Feedback',
+                    label: 'Give Feedback',
                     color: colorScheme.secondary,
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Feedback feature coming soon!')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const GiveFeedbackScreen()),
                       );
                     },
                   ),
@@ -213,16 +228,25 @@ class _HomeScreenState extends State<HomeScreen> {
               _TeamInfoCard(team: team),
             ],
 
-            // Recent activity placeholder
+            // Recent activity
             const SizedBox(height: 24),
-            Text(
-              'Recent Activity',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent Activity',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _selectedIndex = 3),
+                  child: const Text('See all'),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            _EmptyActivityCard(),
+            _RecentActivityList(),
           ],
         ),
       ),
@@ -234,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return NavigationBar(
       selectedIndex: _selectedIndex,
       onDestinationSelected: (index) {
-        if (index == 0 || index == 1) {
+        if (index == 0 || index == 1 || index == 3) {
           setState(() => _selectedIndex = index);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -259,9 +283,9 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'OKRs',
         ),
         NavigationDestination(
-          icon: Icon(Icons.history),
-          selectedIcon: Icon(Icons.history),
-          label: 'Activity',
+          icon: Icon(Icons.emoji_emotions_outlined),
+          selectedIcon: Icon(Icons.emoji_emotions),
+          label: 'Interactions',
         ),
       ],
     );
@@ -482,39 +506,118 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _EmptyActivityCard extends StatelessWidget {
+class _RecentActivityList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final interactions = context.watch<InteractionProvider>();
+    final teamProvider = context.read<TeamProvider>();
+
+    if (interactions.isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    final recentActivity = interactions.recentActivity.take(5).toList();
+
+    if (recentActivity.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              Icon(
+                Icons.history,
+                size: 48,
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No recent activity',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Start by giving kudos or logging an interaction',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    String getDisplayName(String email) {
+      final profile = teamProvider.memberProfiles[email];
+      return profile?.displayName ?? email;
+    }
+
+    String formatDate(DateTime date) {
+      final now = DateTime.now();
+      final diff = now.difference(date);
+
+      if (diff.inDays == 0) {
+        return 'Today';
+      } else if (diff.inDays == 1) {
+        return 'Yesterday';
+      } else if (diff.inDays < 7) {
+        return '${diff.inDays}d ago';
+      } else {
+        return '${date.day}/${date.month}';
+      }
+    }
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          children: [
-            Icon(
-              Icons.history,
-              size: 48,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+      child: Column(
+        children: recentActivity.map((interaction) {
+          final isKudos = interaction.kind == InteractionKind.appreciation;
+          final currentUserEmail = interactions.currentUserEmail;
+          final isReceived = interaction.withMembers.contains(currentUserEmail);
+
+          return ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (isKudos ? colorScheme.primary : colorScheme.secondary)
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isKudos ? Icons.emoji_emotions : Icons.feedback,
+                color: isKudos ? colorScheme.primary : colorScheme.secondary,
+                size: 20,
+              ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No recent activity',
-              style: theme.textTheme.titleSmall?.copyWith(
+            title: Text(
+              isReceived
+                  ? 'From ${getDisplayName(interaction.from)}'
+                  : 'To ${interaction.withMembers.map(getDisplayName).join(", ")}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              interaction.note,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(
+              formatDate(interaction.timestamp),
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Start by giving kudos or logging an interaction',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+          );
+        }).toList(),
       ),
     );
   }

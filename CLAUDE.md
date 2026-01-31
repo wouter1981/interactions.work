@@ -62,6 +62,57 @@ Engagement system with regular prompts:
 | Data Format | YAML |
 | Platforms | GitHub, GitLab, pure Git |
 
+## Architecture: Rust Core as Single Source of Truth
+
+### Design Principle
+
+**All business logic lives in `rust/core/`.** Both the TUI and Flutter app consume this shared core:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      User Interfaces                         │
+├─────────────────────────────┬───────────────────────────────┤
+│     TUI (Rust/Ratatui)      │      Flutter (Dart)           │
+│     - Terminal interface    │      - Mobile UI              │
+│     - Direct Rust calls     │      - OAuth integrations     │
+│     - CI/CD headless mode   │      - Platform features      │
+├─────────────────────────────┴───────────────────────────────┤
+│                    rust/ffi (FFI Bridge)                     │
+│              flutter_rust_bridge bindings                    │
+├─────────────────────────────────────────────────────────────┤
+│                     rust/core (Business Logic)               │
+│     - Domain models (Team, Member, Interaction, OKR)        │
+│     - Authentication (Credentials, pincode hashing)          │
+│     - Storage operations (YAML, directory structure)         │
+│     - Validation and business rules                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### What Goes Where
+
+| Layer | Responsibility | Examples |
+|-------|----------------|----------|
+| **rust/core** | All business logic, models, validation | Team, Interaction, OKR models; pincode auth; YAML serialization |
+| **rust/ffi** | FFI-safe wrappers for Flutter | Exposes core types via flutter_rust_bridge |
+| **rust/tui** | Terminal UI only | Ratatui rendering, keyboard input, terminal state |
+| **flutter** | Mobile UI + platform integrations | Material 3 widgets, GitHub OAuth, secure storage |
+
+### Feature Parity Requirement
+
+**Every feature must be available in both TUI and Flutter.** This ensures:
+- Users can choose their preferred interface
+- CI/CD can use headless TUI commands
+- Business logic is tested once in Rust core
+
+| Feature | TUI | Flutter | Core Logic Location |
+|---------|-----|---------|---------------------|
+| Create team | ✓ | ✓ | `rust/core/src/storage/` |
+| Log interaction | ✓ | ✓ | `rust/core/src/models/interaction.rs` |
+| Manage OKRs | ✓ | ✓ | `rust/core/src/models/okr.rs` |
+| Pincode auth | ✓ | ✓ | `rust/core/src/auth.rs` |
+| GitHub OAuth | ✗ | ✓ | Flutter only (platform-specific) |
+| Publish markdown | ✓ | ✓ | `rust/core/` (TUI headless) |
+
 ## Repository Structure
 
 ### Codebase
@@ -70,12 +121,21 @@ Engagement system with regular prompts:
 interactions.work/
 ├── CLAUDE.md
 ├── README.md
-├── rust/                       # Rust core library + TUI
-│   ├── core/                   # Shared business logic
+├── check.sh                    # Run all checks, linting, and tests
+├── run.sh                      # Build and run TUI or Flutter Desktop
+├── flutter_rust_bridge.yaml    # FFI bridge configuration
+├── rust/                       # Rust workspace
+│   ├── core/                   # Shared business logic (THE source of truth)
+│   ├── ffi/                    # FFI bindings for Flutter
 │   ├── tui/                    # Terminal UI (Ratatui)
 │   └── Cargo.toml
 ├── flutter/                    # Mobile app
 │   ├── lib/
+│   │   ├── src/rust/           # Dart models mirroring Rust core
+│   │   ├── models/             # Re-exports + Flutter-only models
+│   │   ├── providers/          # State management
+│   │   ├── screens/            # UI screens
+│   │   └── services/           # GitHub API, OAuth
 │   ├── android/
 │   ├── ios/
 │   └── pubspec.yaml
@@ -245,6 +305,84 @@ chore: update dependencies
 3. **Privacy first** - Never expose private data patterns
 4. **Keep it simple** - Soft skills don't need complex code
 5. **Test thoroughly** - Especially encryption and git operations
+6. **Run checks before committing** - Use `./check.sh` to verify all code
+
+### Verification Script
+
+**Always run `./check.sh` after making changes.** This script runs all checks, linting, and tests for both Rust and Flutter:
+
+```bash
+./check.sh              # Run all checks
+./check.sh --rust       # Rust only
+./check.sh --flutter    # Flutter only
+./check.sh --fix        # Auto-fix formatting issues
+```
+
+The script runs:
+- **Rust**: `cargo fmt --check`, `cargo check`, `cargo clippy`, `cargo test`
+- **Flutter**: `dart format --set-exit-if-changed`, `dart analyze`, `flutter test`
+
+### Implementing New Features
+
+**Always start in Rust core.** Follow this workflow:
+
+1. **Models & Logic → `rust/core/`**
+   - Add or modify domain models in `rust/core/src/models/`
+   - Add business logic, validation, storage operations
+   - Write tests in Rust (`cargo test`)
+
+2. **FFI Exposure → `rust/ffi/`**
+   - Add FFI-safe wrappers in `rust/ffi/src/api.rs`
+   - Expose new types and functions for Flutter
+
+3. **Dart Models → `flutter/lib/src/rust/`**
+   - Mirror the Rust types in `flutter/lib/src/rust/models.dart`
+   - Keep APIs identical (same method names, same behavior)
+   - Update exports in `flutter/lib/models/models.dart`
+
+4. **TUI Implementation → `rust/tui/`**
+   - Add UI for the feature in the terminal interface
+   - Use the core library directly
+
+5. **Flutter UI → `flutter/lib/`**
+   - Add screens, widgets, providers as needed
+   - Use the Dart models from `src/rust/`
+
+### Example: Adding a New Interaction Type
+
+```
+1. rust/core/src/models/interaction.rs
+   → Add new variant to InteractionKind enum
+   → Add factory method if needed
+   → Write tests
+
+2. rust/ffi/src/api.rs
+   → Update InteractionKind enum to include new variant
+   → Update conversion functions
+
+3. flutter/lib/src/rust/models.dart
+   → Add new variant to InteractionKind enum
+   → Add label() and yamlKey getter cases
+
+4. rust/tui/src/app.rs
+   → Add quick action for new interaction type
+
+5. flutter/lib/screens/
+   → Add UI for logging the new interaction type
+```
+
+### Flutter-Only Features
+
+Some features are platform-specific and belong only in Flutter:
+
+| Feature | Reason |
+|---------|--------|
+| GitHub/GitLab OAuth | Browser-based OAuth flow |
+| Secure token storage | Platform keychain APIs |
+| Push notifications | Firebase/APNs |
+| Biometric auth | Platform APIs |
+
+These do NOT need Rust core equivalents. The TUI uses pincode auth and local git credentials instead.
 
 ### Key Principles
 
@@ -252,6 +390,7 @@ chore: update dependencies
 - Interactions are personal - treat logged moments with care
 - Encryption must be correct - private means private
 - Git is the backend - respect the branching workflow
+- **Rust core is the source of truth** - all data models and logic start there
 
 ### Things to Avoid
 
@@ -260,11 +399,16 @@ chore: update dependencies
 - Don't commit directly to `main` or `interactions` branches
 - Don't add hard metric tracking - this is about soft skills
 - Don't over-engineer - keep the focus on human connection
+- **Don't implement business logic in Flutter only** - it must be in Rust core
+- **Don't add Dart models without Rust equivalents** - keep them in sync
+- **Don't skip TUI support** - every feature needs both interfaces
 
 ## Quick Reference
 
 | Task | Command |
 |------|---------|
+| **All checks & tests** | `./check.sh` |
+| Build & run apps | `./run.sh` |
 | Run TUI | `interactions` |
 | Publish content | `interactions publish` |
 | Lint PR | `interactions lint` |
@@ -274,3 +418,20 @@ chore: update dependencies
 | Flutter tests | `flutter test` |
 | Format Rust | `cargo fmt` |
 | Format Dart | `dart format .` |
+| Check Rust | `cargo check --workspace` |
+| Clippy lint | `cargo clippy --workspace` |
+| Auto-fix formatting | `./check.sh --fix` |
+
+## Model Locations Reference
+
+| Model | Rust Core | Rust FFI | Dart |
+|-------|-----------|----------|------|
+| `Team` | `rust/core/src/models/team.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `TeamConfig` | `rust/core/src/models/config.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `Member` | `rust/core/src/models/member.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `Credentials` | `rust/core/src/auth.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `Interaction` | `rust/core/src/models/interaction.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `Objective` | `rust/core/src/models/okr.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `KeyResult` | `rust/core/src/models/okr.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
+| `GitHubUser` | N/A | N/A | `flutter/lib/models/github_user.dart` |
+| `GitHubRepository` | N/A | N/A | `flutter/lib/models/github_repository.dart` |

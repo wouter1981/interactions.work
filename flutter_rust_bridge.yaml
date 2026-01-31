@@ -1,0 +1,9 @@
+# flutter_rust_bridge v2 configuration
+rust_input: crate::api
+rust_root: rust/ffi
+dart_output: flutter/lib/src/rust
+dart_root: flutter
+full_dep: true
+deps_check: false
+build_runner: false
+web: false

@@ -2,9 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_writer/yaml_writer.dart';
 
-import '../models/credentials.dart';
-import '../models/team.dart';
-import '../models/github_repository.dart';
+import '../models/models.dart';
 import '../services/github_service.dart';
 import 'repository_provider.dart';
 
@@ -189,7 +187,7 @@ class TeamProvider extends ChangeNotifier {
       );
 
       // Create default config
-      _config = TeamConfig.defaultConfig();
+      _config = TeamConfig.withDefaults();
 
       final yamlWriter = YamlWriter();
 

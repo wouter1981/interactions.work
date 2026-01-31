@@ -336,8 +336,12 @@ mod tests {
         storage.save_credentials(&creds).unwrap();
 
         // Verify using storage method
-        assert!(storage.verify_pincode("user@example.com", "mypin123").unwrap());
-        assert!(!storage.verify_pincode("user@example.com", "wrongpin").unwrap());
+        assert!(storage
+            .verify_pincode("user@example.com", "mypin123")
+            .unwrap());
+        assert!(!storage
+            .verify_pincode("user@example.com", "wrongpin")
+            .unwrap());
     }
 
     #[test]
@@ -361,8 +365,7 @@ mod tests {
 
         let config = TeamConfig::with_defaults();
 
-        let leader = Member::new("leader@example.com")
-            .with_name("Team Leader");
+        let leader = Member::new("leader@example.com").with_name("Team Leader");
 
         storage
             .initialize_team(&team, &config, &leader, "leaderpin")
@@ -373,7 +376,9 @@ mod tests {
         assert!(storage.load_team().unwrap().is_some());
         assert!(storage.load_config().unwrap().is_some());
         assert!(storage.load_member("leader@example.com").unwrap().is_some());
-        assert!(storage.verify_pincode("leader@example.com", "leaderpin").unwrap());
+        assert!(storage
+            .verify_pincode("leader@example.com", "leaderpin")
+            .unwrap());
     }
 
     #[test]

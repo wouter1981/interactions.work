@@ -240,7 +240,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               icon: Icons.lightbulb_outline,
                               color: colorScheme.primary,
                               backgroundColor: colorScheme.primaryContainer
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               text:
                                   'A manifesto defines the behavior norms and cultural principles your team strives for. '
                                   'Members commit to following these principles.',
@@ -276,7 +276,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               icon: Icons.flag_outlined,
                               color: colorScheme.secondary,
                               backgroundColor: colorScheme.secondaryContainer
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               text:
                                   'A vision describes what your team aims to achieve. '
                                   'It provides direction and inspiration for team members.',
@@ -310,8 +310,8 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                                         : Icons.visibility,
                                   ),
                                   onPressed: () {
-                                    setState(
-                                        () => _obscurePincode = !_obscurePincode);
+                                    setState(() =>
+                                        _obscurePincode = !_obscurePincode);
                                   },
                                 ),
                               ),
@@ -354,7 +354,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               icon: Icons.terminal,
                               color: colorScheme.tertiary,
                               backgroundColor: colorScheme.tertiaryContainer
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               text:
                                   'This pincode allows you to log in from the terminal (TUI) using your email and pincode. '
                                   'It is stored securely in the repository and can be used across devices.',
@@ -499,13 +499,17 @@ class _CreatingTeamView extends StatelessWidget {
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SetupStep(icon: Icons.check, label: 'Creating interactions branch'),
+                  _SetupStep(
+                      icon: Icons.check, label: 'Creating interactions branch'),
                   SizedBox(height: 8),
-                  _SetupStep(icon: Icons.check, label: 'Adding team configuration'),
+                  _SetupStep(
+                      icon: Icons.check, label: 'Adding team configuration'),
                   SizedBox(height: 8),
                   _SetupStep(icon: Icons.check, label: 'Creating your profile'),
                   SizedBox(height: 8),
-                  _SetupStep(icon: Icons.hourglass_empty, label: 'Setting up directories'),
+                  _SetupStep(
+                      icon: Icons.hourglass_empty,
+                      label: 'Setting up directories'),
                 ],
               ),
             ),

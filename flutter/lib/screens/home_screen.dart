@@ -68,9 +68,9 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const PopupMenuDivider(),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'switch_repo',
-                child: const Row(
+                child: Row(
                   children: [
                     Icon(Icons.swap_horiz),
                     SizedBox(width: 8),
@@ -84,7 +84,8 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.logout, color: colorScheme.error),
                     const SizedBox(width: 8),
-                    Text('Sign out', style: TextStyle(color: colorScheme.error)),
+                    Text('Sign out',
+                        style: TextStyle(color: colorScheme.error)),
                   ],
                 ),
               ),
@@ -128,7 +129,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.primary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Kudos feature coming soon!')),
+                        const SnackBar(
+                            content: Text('Kudos feature coming soon!')),
                       );
                     },
                   ),
@@ -141,7 +143,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.secondary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Feedback feature coming soon!')),
+                        const SnackBar(
+                            content: Text('Feedback feature coming soon!')),
                       );
                     },
                   ),
@@ -158,7 +161,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.tertiary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Journal feature coming soon!')),
+                        const SnackBar(
+                            content: Text('Journal feature coming soon!')),
                       );
                     },
                   ),
@@ -171,7 +175,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.error,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('OKR feature coming soon!')),
+                        const SnackBar(
+                            content: Text('OKR feature coming soon!')),
                       );
                     },
                   ),
@@ -281,7 +286,7 @@ class _WelcomeCard extends StatelessWidget {
             Text(
               'Ready to strengthen connections with $teamName?',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: colorScheme.onPrimaryContainer.withOpacity(0.8),
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -320,7 +325,7 @@ class _QuickActionCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color),
@@ -469,7 +474,7 @@ class _EmptyActivityCard extends StatelessWidget {
             Icon(
               Icons.history,
               size: 48,
-              color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -482,7 +487,7 @@ class _EmptyActivityCard extends StatelessWidget {
             Text(
               'Start by giving kudos or logging an interaction',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),

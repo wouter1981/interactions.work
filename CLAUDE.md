@@ -121,6 +121,8 @@ Engagement system with regular prompts:
 interactions.work/
 ├── CLAUDE.md
 ├── README.md
+├── check.sh                    # Run all checks, linting, and tests
+├── run.sh                      # Build and run TUI or Flutter Desktop
 ├── flutter_rust_bridge.yaml    # FFI bridge configuration
 ├── rust/                       # Rust workspace
 │   ├── core/                   # Shared business logic (THE source of truth)
@@ -303,6 +305,22 @@ chore: update dependencies
 3. **Privacy first** - Never expose private data patterns
 4. **Keep it simple** - Soft skills don't need complex code
 5. **Test thoroughly** - Especially encryption and git operations
+6. **Run checks before committing** - Use `./check.sh` to verify all code
+
+### Verification Script
+
+**Always run `./check.sh` after making changes.** This script runs all checks, linting, and tests for both Rust and Flutter:
+
+```bash
+./check.sh              # Run all checks
+./check.sh --rust       # Rust only
+./check.sh --flutter    # Flutter only
+./check.sh --fix        # Auto-fix formatting issues
+```
+
+The script runs:
+- **Rust**: `cargo fmt --check`, `cargo check`, `cargo clippy`, `cargo test`
+- **Flutter**: `dart format --set-exit-if-changed`, `dart analyze`, `flutter test`
 
 ### Implementing New Features
 
@@ -389,6 +407,8 @@ These do NOT need Rust core equivalents. The TUI uses pincode auth and local git
 
 | Task | Command |
 |------|---------|
+| **All checks & tests** | `./check.sh` |
+| Build & run apps | `./run.sh` |
 | Run TUI | `interactions` |
 | Publish content | `interactions publish` |
 | Lint PR | `interactions lint` |
@@ -400,6 +420,7 @@ These do NOT need Rust core equivalents. The TUI uses pincode auth and local git
 | Format Dart | `dart format .` |
 | Check Rust | `cargo check --workspace` |
 | Clippy lint | `cargo clippy --workspace` |
+| Auto-fix formatting | `./check.sh --fix` |
 
 ## Model Locations Reference
 

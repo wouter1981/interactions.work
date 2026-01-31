@@ -25,8 +25,7 @@ impl Credentials {
     /// Returns an error if the pincode is less than 4 characters.
     #[frb(sync)]
     pub fn create(pincode: String) -> Result<Credentials, String> {
-        let creds = interactions_core::Credentials::new(&pincode)
-            .map_err(|e| e.to_string())?;
+        let creds = interactions_core::Credentials::new(&pincode).map_err(|e| e.to_string())?;
         Ok(Credentials {
             salt: creds.salt,
             pincode_hash: creds.pincode_hash,
@@ -477,8 +476,7 @@ pub fn team_to_yaml(team: &Team) -> Result<String, String> {
 /// Parse team from YAML string.
 #[frb(sync)]
 pub fn team_from_yaml(yaml: String) -> Result<Team, String> {
-    let core: interactions_core::Team =
-        serde_yaml::from_str(&yaml).map_err(|e| e.to_string())?;
+    let core: interactions_core::Team = serde_yaml::from_str(&yaml).map_err(|e| e.to_string())?;
     Ok(Team {
         name: core.name,
         manifesto: core.manifesto,
@@ -492,23 +490,35 @@ pub fn team_from_yaml(yaml: String) -> Result<Team, String> {
 #[frb(sync)]
 pub fn team_config_to_yaml(config: &TeamConfig) -> Result<String, String> {
     let core = interactions_core::TeamConfig {
-        publish: config.publish.as_ref().map(|p| interactions_core::PublishConfig {
-            manifesto: p.manifesto.clone(),
-            vision: p.vision.clone(),
-            okrs: p.okrs.clone(),
-        }),
-        webhooks: config.webhooks.as_ref().map(|w| interactions_core::WebhookConfig {
-            discord: w.discord.clone(),
-            slack: w.slack.clone(),
-            signal: w.signal.clone(),
-        }),
-        linting: config.linting.as_ref().map(|l| interactions_core::LintingConfig {
-            enabled: l.enabled,
-            target_branch: l.target_branch.clone(),
-        }),
-        backup: config.backup.as_ref().map(|b| interactions_core::BackupConfig {
-            protected_branch: b.protected_branch.clone(),
-        }),
+        publish: config
+            .publish
+            .as_ref()
+            .map(|p| interactions_core::PublishConfig {
+                manifesto: p.manifesto.clone(),
+                vision: p.vision.clone(),
+                okrs: p.okrs.clone(),
+            }),
+        webhooks: config
+            .webhooks
+            .as_ref()
+            .map(|w| interactions_core::WebhookConfig {
+                discord: w.discord.clone(),
+                slack: w.slack.clone(),
+                signal: w.signal.clone(),
+            }),
+        linting: config
+            .linting
+            .as_ref()
+            .map(|l| interactions_core::LintingConfig {
+                enabled: l.enabled,
+                target_branch: l.target_branch.clone(),
+            }),
+        backup: config
+            .backup
+            .as_ref()
+            .map(|b| interactions_core::BackupConfig {
+                protected_branch: b.protected_branch.clone(),
+            }),
     };
     serde_yaml::to_string(&core).map_err(|e| e.to_string())
 }
@@ -554,8 +564,7 @@ pub fn member_to_yaml(member: &Member) -> Result<String, String> {
 /// Parse member from YAML string.
 #[frb(sync)]
 pub fn member_from_yaml(yaml: String) -> Result<Member, String> {
-    let core: interactions_core::Member =
-        serde_yaml::from_str(&yaml).map_err(|e| e.to_string())?;
+    let core: interactions_core::Member = serde_yaml::from_str(&yaml).map_err(|e| e.to_string())?;
     Ok(Member {
         email: core.email,
         name: core.name,
@@ -624,7 +633,9 @@ pub fn objective_to_yaml(objective: &Objective) -> Result<String, String> {
         OkrVisibility::Shared => interactions_core::OkrVisibility::Shared,
     };
 
-    let key_results: Vec<interactions_core::KeyResult> = objective.key_results.iter()
+    let key_results: Vec<interactions_core::KeyResult> = objective
+        .key_results
+        .iter()
         .map(|kr| interactions_core::KeyResult {
             description: kr.description.clone(),
             progress: kr.progress,
@@ -655,7 +666,9 @@ pub fn objective_from_yaml(yaml: String) -> Result<Objective, String> {
         interactions_core::OkrVisibility::Shared => OkrVisibility::Shared,
     };
 
-    let key_results: Vec<KeyResult> = core.key_results.iter()
+    let key_results: Vec<KeyResult> = core
+        .key_results
+        .iter()
         .map(|kr| KeyResult {
             description: kr.description.clone(),
             progress: kr.progress,

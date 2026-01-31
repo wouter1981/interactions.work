@@ -64,7 +64,8 @@ class LoginScreen extends StatelessWidget {
                       return const _LoadingButton();
                     }
 
-                    if (auth.isAwaitingDeviceAuth && auth.deviceFlowState != null) {
+                    if (auth.isAwaitingDeviceAuth &&
+                        auth.deviceFlowState != null) {
                       return _DeviceFlowCard(
                         userCode: auth.deviceFlowState!.userCode,
                         verificationUri: auth.deviceFlowState!.verificationUri,
@@ -247,7 +248,8 @@ class _DeviceFlowCard extends StatelessWidget {
                   Icon(
                     Icons.copy,
                     size: 20,
-                    color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                    color:
+                        colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                   ),
                 ],
               ),

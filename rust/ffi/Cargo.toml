@@ -11,6 +11,6 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 interactions-core = { path = "../core" }
-flutter_rust_bridge.workspace = true
+flutter_rust_bridge = "=2.11.1"
 chrono.workspace = true
 serde_yaml.workspace = true

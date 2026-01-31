@@ -6,3 +6,4 @@ dart_root: flutter
 full_dep: true
 deps_check: false
 build_runner: false
+web: false

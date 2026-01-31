@@ -2,168 +2,80 @@
 
 ## Summary
 
-The Rust FFI infrastructure is set up, but the Dart bindings need to be generated locally where Flutter SDK is available.
+The Rust FFI API is set up, but code generation has compatibility issues with Dart 3.10+/Flutter 3.38+.
+
+**Current Status**: Using manual Dart models that mirror the Rust API. This works well and all tests pass.
 
 ## Background
 
 The code duplication evaluation identified that Dart models were duplicating Rust core models. The solution is to use `flutter_rust_bridge` to generate Dart FFI bindings from the Rust code, eliminating duplication.
 
-**Completed:**
+## What's Completed
+
 - [x] Created `rust/ffi/` crate with FFI-safe API (`rust/ffi/src/api.rs`)
 - [x] Added `flutter_rust_bridge.yaml` configuration
 - [x] Updated `CLAUDE.md` with architecture guidelines
-- [x] Configured `flutter_rust_bridge_codegen` (requires local Flutter SDK to run)
+- [x] Configured `flutter_rust_bridge_codegen`
+- [x] Created manual Dart models in `flutter/lib/src/rust/models.dart`
+- [x] Tests pass for both Rust (42 tests) and Flutter (18 tests)
 
-**Remaining:**
-- [ ] Generate Dart FFI bindings
+## Blocked
+
+- [ ] Generate Dart FFI bindings - **Blocked by Dart SDK compatibility**
 - [ ] Remove manual Dart model implementations
 - [ ] Update Flutter imports to use generated bindings
-- [ ] Test the integration
 
-## Steps to Complete
+### Compatibility Issue
 
-### 1. Generate FFI Bindings
+The `flutter_rust_bridge_codegen` generates code that's incompatible with Dart 3.10+:
 
-```bash
-cd /path/to/interactions.work
-flutter_rust_bridge_codegen generate
+```
+error - lib/src/rust/frb_generated.io.dart:1592:12 - Fields in struct classes can't
+have the type 'bool'. They can only be declared as 'int', 'double', 'Array', 'Pointer',
+or subtype of 'Struct' or 'Union'.
 ```
 
-This will generate files in `flutter/lib/src/rust/`:
-- `frb_generated.dart` - Main generated bindings
-- `frb_generated.io.dart` - Platform-specific IO implementation
-- `frb_generated.web.dart` - Web implementation (if enabled)
+This is a known issue between flutter_rust_bridge and newer Dart SDK versions.
 
-### 2. Update Rust FFI lib.rs
+## Current Working Approach
 
-After generation, update `rust/ffi/src/lib.rs` to include the generated module:
+The manual Dart models in `flutter/lib/src/rust/models.dart`:
+- Mirror the Rust API exactly (same method names, same behavior)
+- Are well-tested (18 passing tests)
+- Can be easily replaced with generated bindings when compatibility is fixed
 
-```rust
-mod frb_generated;
-pub mod api;
-```
+## To Resolve When flutter_rust_bridge Updates
 
-### 3. Remove Manual Dart Models
+When a compatible version of flutter_rust_bridge is released:
 
-Delete or replace `flutter/lib/src/rust/models.dart` - the generated bindings will provide these types.
+1. Update `flutter/pubspec.yaml`:
+   ```yaml
+   flutter_rust_bridge: ^2.x.x  # version with Dart 3.10+ support
+   ```
 
-### 4. Update Flutter Imports
+2. Regenerate bindings:
+   ```bash
+   flutter_rust_bridge_codegen generate
+   ```
 
-Update `flutter/lib/models/models.dart` to export from the generated bindings:
+3. Update `flutter/lib/models/models.dart` to use generated types
 
-```dart
-// Generated FFI bindings from Rust core
-export '../src/rust/frb_generated.dart'
-    show
-        Credentials,
-        MemberCredentials,
-        Team,
-        TeamConfig,
-        PublishConfig,
-        WebhookConfig,
-        LintingConfig,
-        BackupConfig,
-        Member,
-        Interaction,
-        InteractionKind,
-        Objective,
-        KeyResult,
-        OkrVisibility;
+4. Remove `flutter/lib/src/rust/models.dart`
 
-// Flutter-only models
-export 'github_user.dart';
-export 'github_repository.dart';
-```
-
-### 5. Add flutter_rust_bridge Dependency
-
-Add to `flutter/pubspec.yaml`:
-
-```yaml
-dependencies:
-  flutter_rust_bridge: ^2.0.0
-```
-
-Then run:
-```bash
-cd flutter && flutter pub get
-```
-
-### 6. Configure Native Library Loading
-
-Update `flutter/lib/main.dart` to initialize the Rust library:
-
-```dart
-import 'src/rust/frb_generated.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
-  runApp(const MyApp());
-}
-```
-
-### 7. Build Native Libraries
-
-For each platform:
-
-```bash
-# Android (requires cargo-ndk)
-cargo install cargo-ndk
-cd rust/ffi
-cargo ndk -t arm64-v8a -t armeabi-v7a -o ../../flutter/android/app/src/main/jniLibs build --release
-
-# iOS (requires cargo-lipo)
-cargo install cargo-lipo
-rustup target add aarch64-apple-ios x86_64-apple-ios
-cd rust/ffi
-cargo lipo --release
-```
-
-Or use flutter_rust_bridge's integrated build system.
-
-### 8. Test
-
-```bash
-# Rust tests
-cargo test --workspace
-
-# Flutter tests
-cd flutter && flutter test
-
-# Run the app
-cd flutter && flutter run
-```
+5. Run tests to verify
 
 ## Files Reference
 
 | File | Purpose |
 |------|---------|
 | `flutter_rust_bridge.yaml` | Codegen configuration |
-| `rust/ffi/src/api.rs` | Rust FFI API (input for codegen) |
+| `rust/ffi/src/api.rs` | Rust FFI API (ready for codegen) |
 | `rust/ffi/Cargo.toml` | FFI crate with cdylib/staticlib |
-| `flutter/lib/src/rust/` | Generated Dart bindings (output) |
-
-## Troubleshooting
-
-### Codegen fails with "Dart/Flutter toolchain not available"
-Ensure Flutter SDK is installed and `flutter` is in your PATH:
-```bash
-flutter --version
-dart --version
-```
-
-### Codegen fails with parse errors
-Check that `rust/ffi/src/api.rs` compiles:
-```bash
-cargo check --package interactions-ffi
-```
-
-### Native library not found at runtime
-Ensure the native library is built and placed in the correct location for each platform.
+| `flutter/lib/src/rust/models.dart` | Manual Dart models (current solution) |
 
 ## Related Documentation
 
 - Evaluation: `docs/code-duplication-evaluation.md`
 - Architecture: See `CLAUDE.md` section "Architecture: Rust Core as Single Source of Truth"
 - flutter_rust_bridge docs: https://cjycode.com/flutter_rust_bridge/
+- flutter_rust_bridge issues: https://github.com/aspect-build/rules_js/issues

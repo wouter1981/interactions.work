@@ -4,9 +4,17 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/team_provider.dart';
+import 'team_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +23,14 @@ class HomeScreen extends StatelessWidget {
     final auth = context.watch<AuthProvider>();
     final repo = context.watch<RepositoryProvider>();
     final team = context.watch<TeamProvider>();
+
+    // Show TeamScreen when Team tab is selected
+    if (_selectedIndex == 1) {
+      return Scaffold(
+        body: const TeamScreen(),
+        bottomNavigationBar: _buildNavigationBar(context),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -210,38 +226,44 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (index) {
-          if (index != 0) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Coming soon!')),
-            );
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Team',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.flag_outlined),
-            selectedIcon: Icon(Icons.flag),
-            label: 'OKRs',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history),
-            selectedIcon: Icon(Icons.history),
-            label: 'Activity',
-          ),
-        ],
-      ),
+      bottomNavigationBar: _buildNavigationBar(context),
+    );
+  }
+
+  Widget _buildNavigationBar(BuildContext context) {
+    return NavigationBar(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) {
+        if (index == 0 || index == 1) {
+          setState(() => _selectedIndex = index);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Coming soon!')),
+          );
+        }
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.people_outline),
+          selectedIcon: Icon(Icons.people),
+          label: 'Team',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.flag_outlined),
+          selectedIcon: Icon(Icons.flag),
+          label: 'OKRs',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.history),
+          selectedIcon: Icon(Icons.history),
+          label: 'Activity',
+        ),
+      ],
     );
   }
 }

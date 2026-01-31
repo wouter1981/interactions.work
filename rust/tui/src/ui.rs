@@ -1,6 +1,9 @@
 //! UI rendering with Ratatui
 
-use crate::app::{AddMemberStep, App, InitStep, Tab};
+use crate::app::{
+    AddMemberStep, App, FeedbackStep, InitStep, InteractionsSubTab, InteractionsView, KudosStep,
+    Tab,
+};
 use ratatui::{
     prelude::*,
     widgets::{
@@ -37,6 +40,16 @@ pub fn render(frame: &mut Frame, app: &App) {
     // Render directory navigation wizard overlay if in navigate mode
     if app.is_navigate_dir_mode() {
         render_navigate_dir_wizard(frame, app);
+    }
+
+    // Render kudos wizard overlay if in kudos mode
+    if app.is_kudos_mode() {
+        render_kudos_wizard(frame, app);
+    }
+
+    // Render feedback wizard overlay if in feedback mode
+    if app.is_feedback_mode() {
+        render_feedback_wizard(frame, app);
     }
 }
 
@@ -228,24 +241,187 @@ fn render_team(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 /// Render the interactions tab
-fn render_interactions(frame: &mut Frame, _app: &App, area: Rect) {
-    let text = "No interactions logged yet.\n\n\
-                Use the dashboard to log your first interaction:\n\
-                • Give kudos to appreciate someone's work\n\
-                • Share constructive feedback\n\
-                • Record check-in conversations\n\n\
-                Interactions help build stronger relationships\n\
-                and track meaningful moments with your team.";
+fn render_interactions(frame: &mut Frame, app: &App, area: Rect) {
+    // Main layout: sub-tabs at top, content below
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .split(area);
 
-    let paragraph = Paragraph::new(text)
+    // Render sub-tabs
+    let subtab_titles: Vec<Line> = InteractionsSubTab::all()
+        .iter()
+        .map(|t| {
+            let style = if *t == app.interactions_subtab {
+                Style::default().fg(Color::Magenta).bold()
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            Line::from(t.title()).style(style)
+        })
+        .collect();
+
+    let subtabs = Tabs::new(subtab_titles)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(" Interactions "),
         )
+        .highlight_style(Style::default().fg(Color::Magenta))
+        .select(
+            InteractionsSubTab::all()
+                .iter()
+                .position(|&t| t == app.interactions_subtab)
+                .unwrap_or(0),
+        );
+
+    frame.render_widget(subtabs, main_chunks[0]);
+
+    // Content area: list on left, detail on right
+    let content_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(main_chunks[1]);
+
+    // Get current interactions list
+    let interactions_list = app.current_interactions();
+    let type_name = match app.interactions_subtab {
+        InteractionsSubTab::Kudos => "Kudos",
+        InteractionsSubTab::Feedback => "Feedback",
+    };
+    let view_title = match app.interactions_view {
+        InteractionsView::Sent => format!(" Sent {} ({}) ", type_name, interactions_list.len()),
+        InteractionsView::Received => {
+            format!(" Received {} ({}) ", type_name, interactions_list.len())
+        }
+    };
+
+    let empty_message = match app.interactions_subtab {
+        InteractionsSubTab::Kudos => "  No kudos yet",
+        InteractionsSubTab::Feedback => "  No feedback yet",
+    };
+
+    let items: Vec<ListItem> = if interactions_list.is_empty() {
+        vec![ListItem::new(empty_message).style(Style::default().fg(Color::DarkGray))]
+    } else {
+        interactions_list
+            .iter()
+            .enumerate()
+            .map(|(i, interaction)| {
+                let is_selected = i == app.interaction_index;
+                let style = if is_selected {
+                    Style::default().fg(Color::Yellow).bold()
+                } else {
+                    Style::default()
+                };
+
+                let prefix = if is_selected { "> " } else { "  " };
+                let person = match app.interactions_view {
+                    InteractionsView::Sent => {
+                        interaction.with.first().map(|s| s.as_str()).unwrap_or("?")
+                    }
+                    InteractionsView::Received => interaction.from.as_str(),
+                };
+                let date = interaction.timestamp.format("%m/%d").to_string();
+                let shared_marker = if interaction.shared { " *" } else { "" };
+
+                // Truncate note for list view
+                let note_preview: String = interaction.note.chars().take(20).collect();
+                let note_suffix = if interaction.note.len() > 20 {
+                    "..."
+                } else {
+                    ""
+                };
+
+                ListItem::new(format!(
+                    "{}{} [{}]{} - {}{}",
+                    prefix, person, date, shared_marker, note_preview, note_suffix
+                ))
+                .style(style)
+            })
+            .collect()
+    };
+
+    let view_toggle_hint = match app.interactions_view {
+        InteractionsView::Sent => "←→: received",
+        InteractionsView::Received => "←→: sent",
+    };
+
+    let border_color = match app.interactions_subtab {
+        InteractionsSubTab::Kudos => Color::Magenta,
+        InteractionsSubTab::Feedback => Color::Blue,
+    };
+
+    let list_block = Block::default()
+        .borders(Borders::ALL)
+        .title(view_title)
+        .title_bottom(Line::from(format!("{} | 1/2: switch type", view_toggle_hint)).centered())
+        .border_style(Style::default().fg(border_color));
+
+    let list = List::new(items).block(list_block);
+    frame.render_widget(list, content_chunks[0]);
+
+    // Right side: interaction detail
+    let detail_title = format!(" {} Detail ", type_name);
+    let detail_content = if interactions_list.is_empty() {
+        let action_hint = match app.interactions_subtab {
+            InteractionsSubTab::Kudos => {
+                "Use the dashboard to give kudos:\n\
+                 • Express appreciation for someone's work\n\
+                 • Recognize helpful contributions\n\
+                 • Share gratitude with your team"
+            }
+            InteractionsSubTab::Feedback => {
+                "Use the dashboard to share feedback:\n\
+                 • Provide constructive observations\n\
+                 • Help others grow and improve\n\
+                 • Build a culture of open communication"
+            }
+        };
+        format!(
+            "Select an item to view details.\n\n{}\n\n* = shared with team",
+            action_hint
+        )
+    } else if let Some(interaction) = interactions_list.get(app.interaction_index) {
+        let direction = match app.interactions_view {
+            InteractionsView::Sent => format!(
+                "To: {}",
+                interaction.with.first().map(|s| s.as_str()).unwrap_or("?")
+            ),
+            InteractionsView::Received => format!("From: {}", interaction.from),
+        };
+        let date = interaction
+            .timestamp
+            .format("%B %d, %Y at %H:%M")
+            .to_string();
+        let shared_text = if interaction.shared {
+            "Shared with team"
+        } else {
+            "Private"
+        };
+
+        format!(
+            "{}\nDate: {}\nStatus: {}\n\n{}\n\n{}",
+            direction,
+            date,
+            shared_text,
+            "─".repeat(40),
+            interaction.note
+        )
+    } else {
+        "No item selected".to_string()
+    };
+
+    let detail = Paragraph::new(detail_content)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(detail_title)
+                .border_style(Style::default().fg(border_color)),
+        )
         .wrap(Wrap { trim: true });
 
-    frame.render_widget(paragraph, area);
+    frame.render_widget(detail, content_chunks[1]);
 }
 
 /// Render the OKRs tab
@@ -291,12 +467,18 @@ fn render_settings(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render the footer with help text and working directory
 fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
-    let help_text = if app.is_init_mode() || app.is_add_member_mode() {
+    let help_text = if app.is_init_mode()
+        || app.is_add_member_mode()
+        || app.is_kudos_mode()
+        || app.is_feedback_mode()
+    {
         "Enter: submit | Esc: cancel".to_string()
     } else if app.is_navigate_dir_mode() {
         "↑↓: navigate | Enter: open | /: type path | Space: select folder | Esc: cancel".to_string()
     } else if let Some(msg) = &app.status_message {
         msg.clone()
+    } else if app.current_tab == Tab::Interactions {
+        "Tab: switch | ↑↓: browse | ←→: sent/recv | 1/2: kudos/feedback | q: quit".to_string()
     } else if app.current_tab == Tab::Team && app.team.is_some() {
         "Tab: switch | ↑↓/jk: navigate | Enter: select | a: add member | o: open folder | q: quit"
             .to_string()
@@ -659,4 +841,204 @@ fn render_navigate_dir_wizard(frame: &mut Frame, app: &App) {
             .alignment(Alignment::Left)
     };
     frame.render_widget(help_text, chunks[2]);
+}
+
+/// Render the kudos wizard as a modal overlay
+fn render_kudos_wizard(frame: &mut Frame, app: &App) {
+    let Some(state) = &app.kudos_state else {
+        return;
+    };
+
+    // Calculate centered popup area
+    let area = frame.area();
+    let popup_width = 60.min(area.width.saturating_sub(4));
+    let popup_height = 14.min(area.height.saturating_sub(4));
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    // Clear the area behind the popup
+    frame.render_widget(Clear, popup_area);
+
+    // Render the popup block
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Give Kudos ")
+        .title_style(Style::default().fg(Color::Magenta).bold())
+        .border_style(Style::default().fg(Color::Magenta));
+
+    let inner_area = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    // Layout inside the popup
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // Progress indicator
+            Constraint::Length(2), // Prompt
+            Constraint::Length(3), // Input field
+            Constraint::Min(0),    // Error or info
+        ])
+        .split(inner_area);
+
+    // Progress indicator
+    let steps = ["To", "Message", "Share?"];
+    let current_step_idx = match state.step {
+        KudosStep::Recipient => 0,
+        KudosStep::Note => 1,
+        KudosStep::Share => 2,
+    };
+    let progress: String = steps
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            if i == current_step_idx {
+                format!("[{}]", s)
+            } else if i < current_step_idx {
+                format!("✓{}", s)
+            } else {
+                format!(" {} ", s)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" → ");
+
+    let progress_widget = Paragraph::new(progress)
+        .style(Style::default().fg(Color::Cyan))
+        .alignment(Alignment::Center);
+    frame.render_widget(progress_widget, chunks[0]);
+
+    // Prompt
+    let prompt = Paragraph::new(state.step.prompt())
+        .style(Style::default().fg(Color::White))
+        .alignment(Alignment::Left);
+    frame.render_widget(prompt, chunks[1]);
+
+    // Input field
+    let input_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::White));
+
+    let input = Paragraph::new(format!("{}█", state.input_buffer))
+        .block(input_block)
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(input, chunks[2]);
+
+    // Error message or info
+    if let Some(error) = &state.error_message {
+        let error_widget = Paragraph::new(error.as_str())
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Left);
+        frame.render_widget(error_widget, chunks[3]);
+    } else {
+        let info = match state.step {
+            KudosStep::Recipient => "Enter the person's email or name",
+            KudosStep::Note => "Express your appreciation",
+            KudosStep::Share => "y = visible to team, n = private",
+        };
+        let info_widget = Paragraph::new(info)
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Left);
+        frame.render_widget(info_widget, chunks[3]);
+    }
+}
+
+/// Render the feedback wizard as a modal overlay
+fn render_feedback_wizard(frame: &mut Frame, app: &App) {
+    let Some(state) = &app.feedback_state else {
+        return;
+    };
+
+    // Calculate centered popup area
+    let area = frame.area();
+    let popup_width = 60.min(area.width.saturating_sub(4));
+    let popup_height = 14.min(area.height.saturating_sub(4));
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    // Clear the area behind the popup
+    frame.render_widget(Clear, popup_area);
+
+    // Render the popup block
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Share Feedback ")
+        .title_style(Style::default().fg(Color::Blue).bold())
+        .border_style(Style::default().fg(Color::Blue));
+
+    let inner_area = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    // Layout inside the popup
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // Progress indicator
+            Constraint::Length(2), // Prompt
+            Constraint::Length(3), // Input field
+            Constraint::Min(0),    // Error or info
+        ])
+        .split(inner_area);
+
+    // Progress indicator
+    let steps = ["To", "Message", "Share?"];
+    let current_step_idx = match state.step {
+        FeedbackStep::Recipient => 0,
+        FeedbackStep::Note => 1,
+        FeedbackStep::Share => 2,
+    };
+    let progress: String = steps
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            if i == current_step_idx {
+                format!("[{}]", s)
+            } else if i < current_step_idx {
+                format!("✓{}", s)
+            } else {
+                format!(" {} ", s)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" → ");
+
+    let progress_widget = Paragraph::new(progress)
+        .style(Style::default().fg(Color::Cyan))
+        .alignment(Alignment::Center);
+    frame.render_widget(progress_widget, chunks[0]);
+
+    // Prompt
+    let prompt = Paragraph::new(state.step.prompt())
+        .style(Style::default().fg(Color::White))
+        .alignment(Alignment::Left);
+    frame.render_widget(prompt, chunks[1]);
+
+    // Input field
+    let input_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::White));
+
+    let input = Paragraph::new(format!("{}█", state.input_buffer))
+        .block(input_block)
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(input, chunks[2]);
+
+    // Error message or info
+    if let Some(error) = &state.error_message {
+        let error_widget = Paragraph::new(error.as_str())
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Left);
+        frame.render_widget(error_widget, chunks[3]);
+    } else {
+        let info = match state.step {
+            FeedbackStep::Recipient => "Enter the person's email or name",
+            FeedbackStep::Note => "Be constructive and specific",
+            FeedbackStep::Share => "y = visible to team, n = private",
+        };
+        let info_widget = Paragraph::new(info)
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Left);
+        frame.render_widget(info_widget, chunks[3]);
+    }
 }

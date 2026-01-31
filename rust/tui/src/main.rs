@@ -272,13 +272,53 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
                         }
                     }
+                } else if app.is_kudos_mode() {
+                    // Handle kudos mode
+                    match key.code {
+                        KeyCode::Esc => app.cancel_kudos(),
+                        KeyCode::Enter => app.kudos_submit(),
+                        KeyCode::Backspace => app.kudos_input_backspace(),
+                        KeyCode::Char(c) => app.kudos_input_char(c),
+                        _ => {}
+                    }
+                } else if app.is_feedback_mode() {
+                    // Handle feedback mode
+                    match key.code {
+                        KeyCode::Esc => app.cancel_feedback(),
+                        KeyCode::Enter => app.feedback_submit(),
+                        KeyCode::Backspace => app.feedback_input_backspace(),
+                        KeyCode::Char(c) => app.feedback_input_char(c),
+                        _ => {}
+                    }
                 } else {
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                         KeyCode::Tab => app.next_tab(),
                         KeyCode::BackTab => app.previous_tab(),
-                        KeyCode::Up | KeyCode::Char('k') => app.previous_item(),
-                        KeyCode::Down | KeyCode::Char('j') => app.next_item(),
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if app.current_tab == app::Tab::Interactions {
+                                app.previous_interaction();
+                            } else {
+                                app.previous_item();
+                            }
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if app.current_tab == app::Tab::Interactions {
+                                app.next_interaction();
+                            } else {
+                                app.next_item();
+                            }
+                        }
+                        KeyCode::Left | KeyCode::Right
+                            if app.current_tab == app::Tab::Interactions =>
+                        {
+                            app.toggle_interactions_view();
+                        }
+                        KeyCode::Char('1') | KeyCode::Char('2')
+                            if app.current_tab == app::Tab::Interactions =>
+                        {
+                            app.next_subtab();
+                        }
                         KeyCode::Enter => app.select_item(),
                         KeyCode::Char('a') if app.current_tab == app::Tab::Team => {
                             // Quick shortcut to add member when on Team tab

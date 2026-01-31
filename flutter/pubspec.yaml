@@ -55,7 +55,6 @@ dev_dependencies:
   ffigen: ^9.0.0
   build_runner: ^2.4.0
   freezed: ^2.4.0
-  freezed_annotation: ^2.4.0
 
 flutter:
   uses-material-design: true

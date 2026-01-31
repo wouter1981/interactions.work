@@ -68,9 +68,9 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const PopupMenuDivider(),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'switch_repo',
-                child: const Row(
+                child: Row(
                   children: [
                     Icon(Icons.swap_horiz),
                     SizedBox(width: 8),
@@ -286,7 +286,7 @@ class _WelcomeCard extends StatelessWidget {
             Text(
               'Ready to strengthen connections with $teamName?',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: colorScheme.onPrimaryContainer.withOpacity(0.8),
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
               ),
             ),
           ],
@@ -325,7 +325,7 @@ class _QuickActionCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color),
@@ -474,7 +474,7 @@ class _EmptyActivityCard extends StatelessWidget {
             Icon(
               Icons.history,
               size: 48,
-              color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -487,7 +487,7 @@ class _EmptyActivityCard extends StatelessWidget {
             Text(
               'Start by giving kudos or logging an interaction',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),

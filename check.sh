@@ -43,7 +43,7 @@ check_rust() {
 
     run_step "cargo fmt --check" cargo fmt --check
     run_step "cargo check --workspace" cargo check --workspace
-    run_step "cargo clippy --workspace" cargo clippy --workspace -- -D warnings
+    run_step "cargo clippy --workspace --all-targets" cargo clippy --workspace --all-targets -- -D warnings
     run_step "cargo test --workspace" cargo test --workspace
 }
 
@@ -53,7 +53,7 @@ check_flutter() {
     cd "$FLUTTER_DIR"
 
     run_step "dart format --set-exit-if-changed" dart format --set-exit-if-changed .
-    run_step "dart analyze" dart analyze --fatal-infos
+    run_step "flutter analyze" flutter analyze
     run_step "flutter test" flutter test
 }
 

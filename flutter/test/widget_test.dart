@@ -5,7 +5,7 @@ import 'package:interactions/models/models.dart';
 void main() {
   group('Team', () {
     test('creates team with required fields', () {
-      final team = Team(name: 'Test Team');
+      const team = Team(name: 'Test Team');
 
       expect(team.name, 'Test Team');
       expect(team.manifesto, isNull);
@@ -15,7 +15,7 @@ void main() {
     });
 
     test('creates team with all fields', () {
-      final team = Team(
+      const team = Team(
         name: 'Full Team',
         manifesto: 'We value teamwork',
         vision: 'Be the best',
@@ -31,7 +31,7 @@ void main() {
     });
 
     test('isLeader returns correct value', () {
-      final team = Team(
+      const team = Team(
         name: 'Test',
         leaders: ['leader@example.com'],
         members: ['member@example.com'],
@@ -43,7 +43,7 @@ void main() {
     });
 
     test('isMember includes leaders', () {
-      final team = Team(
+      const team = Team(
         name: 'Test',
         leaders: ['leader@example.com'],
         members: ['member@example.com'],
@@ -55,7 +55,7 @@ void main() {
     });
 
     test('toYaml and fromYaml roundtrip', () {
-      final original = Team(
+      const original = Team(
         name: 'Roundtrip Team',
         manifesto: 'Our manifesto',
         vision: 'Our vision',

@@ -239,8 +239,8 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                             _InfoBox(
                               icon: Icons.lightbulb_outline,
                               color: colorScheme.primary,
-                              backgroundColor:
-                                  colorScheme.primaryContainer.withOpacity(0.3),
+                              backgroundColor: colorScheme.primaryContainer
+                                  .withValues(alpha: 0.3),
                               text:
                                   'A manifesto defines the behavior norms and cultural principles your team strives for. '
                                   'Members commit to following these principles.',
@@ -276,7 +276,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               icon: Icons.flag_outlined,
                               color: colorScheme.secondary,
                               backgroundColor: colorScheme.secondaryContainer
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               text:
                                   'A vision describes what your team aims to achieve. '
                                   'It provides direction and inspiration for team members.',
@@ -354,7 +354,7 @@ class _TeamSetupScreenState extends State<TeamSetupScreen> {
                               icon: Icons.terminal,
                               color: colorScheme.tertiary,
                               backgroundColor: colorScheme.tertiaryContainer
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                               text:
                                   'This pincode allows you to log in from the terminal (TUI) using your email and pincode. '
                                   'It is stored securely in the repository and can be used across devices.',

@@ -84,7 +84,8 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.logout, color: colorScheme.error),
                     const SizedBox(width: 8),
-                    Text('Sign out', style: TextStyle(color: colorScheme.error)),
+                    Text('Sign out',
+                        style: TextStyle(color: colorScheme.error)),
                   ],
                 ),
               ),
@@ -128,7 +129,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.primary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Kudos feature coming soon!')),
+                        const SnackBar(
+                            content: Text('Kudos feature coming soon!')),
                       );
                     },
                   ),
@@ -141,7 +143,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.secondary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Feedback feature coming soon!')),
+                        const SnackBar(
+                            content: Text('Feedback feature coming soon!')),
                       );
                     },
                   ),
@@ -158,7 +161,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.tertiary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Journal feature coming soon!')),
+                        const SnackBar(
+                            content: Text('Journal feature coming soon!')),
                       );
                     },
                   ),
@@ -171,7 +175,8 @@ class HomeScreen extends StatelessWidget {
                     color: colorScheme.error,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('OKR feature coming soon!')),
+                        const SnackBar(
+                            content: Text('OKR feature coming soon!')),
                       );
                     },
                   ),

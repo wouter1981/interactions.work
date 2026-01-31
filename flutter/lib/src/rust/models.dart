@@ -600,9 +600,8 @@ class Interaction {
       id: yaml['id'] as String,
       kind: InteractionKind.fromYaml(yaml['kind'] as String),
       from: yaml['from'] as String,
-      withMembers: (yaml['with'] as List<dynamic>)
-          .map((e) => e as String)
-          .toList(),
+      withMembers:
+          (yaml['with'] as List<dynamic>).map((e) => e as String).toList(),
       note: yaml['note'] as String,
       timestamp: DateTime.parse(yaml['timestamp'] as String),
       shared: yaml['shared'] as bool? ?? false,
@@ -770,7 +769,8 @@ class Objective {
               ?.map((e) => KeyResult.fromYaml(e as Map<String, dynamic>))
               .toList() ??
           [],
-      visibility: OkrVisibility.fromYaml(yaml['visibility'] as String? ?? 'private'),
+      visibility:
+          OkrVisibility.fromYaml(yaml['visibility'] as String? ?? 'private'),
       owner: yaml['owner'] as String?,
       quarter: yaml['quarter'] as String?,
     );

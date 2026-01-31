@@ -1,9 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:interactions/models/credentials.dart';
-import 'package:interactions/models/team.dart';
-import 'package:interactions/models/github_user.dart';
-import 'package:interactions/models/github_repository.dart';
+import 'package:interactions/models/models.dart';
 
 void main() {
   group('Team', () {
@@ -79,7 +76,7 @@ void main() {
 
   group('TeamConfig', () {
     test('creates default config', () {
-      final config = TeamConfig.defaultConfig();
+      final config = TeamConfig.withDefaults();
 
       expect(config.publish, isNotNull);
       expect(config.publish!.manifesto, '/MANIFESTO.md');
@@ -198,8 +195,10 @@ void main() {
     });
 
     test('owner isOrganization returns correct value', () {
-      final userOwner = Owner(id: 1, login: 'user', avatarUrl: 'url', type: 'User');
-      final orgOwner = Owner(id: 2, login: 'org', avatarUrl: 'url', type: 'Organization');
+      final userOwner =
+          Owner(id: 1, login: 'user', avatarUrl: 'url', type: 'User');
+      final orgOwner =
+          Owner(id: 2, login: 'org', avatarUrl: 'url', type: 'Organization');
 
       expect(userOwner.isOrganization, isFalse);
       expect(orgOwner.isOrganization, isTrue);
@@ -208,26 +207,26 @@ void main() {
 
   group('Credentials', () {
     test('creates credentials from pincode', () {
-      final creds = Credentials.fromPincode('mypin123');
+      final creds = Credentials.create('mypin123');
 
       expect(creds.salt, isNotEmpty);
       expect(creds.pincodeHash, isNotEmpty);
     });
 
     test('verifies correct pincode', () {
-      final creds = Credentials.fromPincode('testpin');
+      final creds = Credentials.create('testpin');
 
       expect(creds.verify('testpin'), isTrue);
       expect(creds.verify('wrongpin'), isFalse);
     });
 
     test('throws on short pincode', () {
-      expect(() => Credentials.fromPincode('123'), throwsArgumentError);
+      expect(() => Credentials.create('123'), throwsArgumentError);
     });
 
     test('different salts produce different hashes', () {
-      final creds1 = Credentials.fromPincode('samepin');
-      final creds2 = Credentials.fromPincode('samepin');
+      final creds1 = Credentials.create('samepin');
+      final creds2 = Credentials.create('samepin');
 
       // Different salts
       expect(creds1.salt, isNot(equals(creds2.salt)));
@@ -239,7 +238,7 @@ void main() {
     });
 
     test('toYaml and fromYaml roundtrip', () {
-      final original = Credentials.fromPincode('roundtrip');
+      final original = Credentials.create('roundtrip');
       final yaml = original.toYaml();
       final restored = Credentials.fromYaml(yaml);
 
@@ -251,7 +250,8 @@ void main() {
 
   group('MemberCredentials', () {
     test('creates member credentials', () {
-      final memberCreds = MemberCredentials.create('user@example.com', 'secret');
+      final memberCreds =
+          MemberCredentials.create('user@example.com', 'secret');
 
       expect(memberCreds.email, 'user@example.com');
       expect(memberCreds.verify('secret'), isTrue);

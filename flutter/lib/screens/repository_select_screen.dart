@@ -87,7 +87,8 @@ class _RepositorySelectScreenState extends State<RepositorySelectScreen> {
                     children: [
                       Icon(Icons.logout, color: colorScheme.error),
                       const SizedBox(width: 8),
-                      Text('Sign out', style: TextStyle(color: colorScheme.error)),
+                      Text('Sign out',
+                          style: TextStyle(color: colorScheme.error)),
                     ],
                   ),
                 ),

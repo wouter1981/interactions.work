@@ -1,25 +1,51 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 
 import '../models/github_user.dart';
 
-/// GitHub OAuth configuration
+/// GitHub OAuth configuration using Device Flow
 ///
-/// To use this app, you need to:
+/// Device Flow is designed for CLI and native apps that can't securely
+/// store secrets. The user authorizes via browser while the app polls
+/// for completion. No client secret or callback URLs needed!
+///
+/// To use this app:
 /// 1. Create a GitHub OAuth App at https://github.com/settings/developers
-/// 2. Set the callback URL to: interactions.work://callback
-/// 3. Replace these values with your app's credentials
+/// 2. Enable "Device Flow" in the app settings
+/// 3. Set your Client ID below
 class GitHubOAuthConfig {
-  // TODO: Replace with your GitHub OAuth App credentials
-  // These should be stored securely in production (e.g., environment variables)
-  static const String clientId = 'YOUR_GITHUB_CLIENT_ID';
-  static const String clientSecret = 'YOUR_GITHUB_CLIENT_SECRET';
-  static const String redirectUri = 'interactions.work://callback';
-  static const String callbackScheme = 'interactions.work';
+  // This is safe to commit - Device Flow doesn't require a client secret
+  static const String clientId = 'Ov23lipXEkxpcxvqltQV';
   static const String scope = 'repo user read:org';
+}
+
+/// Device Flow authorization state
+class DeviceFlowState {
+  /// The code the user must enter at the verification URL
+  final String userCode;
+
+  /// The URL where the user enters the code (usually github.com/login/device)
+  final String verificationUri;
+
+  /// Internal device code for polling (don't show to user)
+  final String deviceCode;
+
+  /// Seconds until this authorization request expires
+  final int expiresIn;
+
+  /// Minimum seconds between poll requests
+  final int interval;
+
+  DeviceFlowState({
+    required this.userCode,
+    required this.verificationUri,
+    required this.deviceCode,
+    required this.expiresIn,
+    required this.interval,
+  });
 }
 
 class AuthService {
@@ -46,51 +72,76 @@ class AuthService {
     }
   }
 
-  /// Perform GitHub OAuth login
-  Future<AuthSession> login() async {
-    // Step 1: Get authorization code
-    final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
-      'client_id': GitHubOAuthConfig.clientId,
-      'redirect_uri': GitHubOAuthConfig.redirectUri,
-      'scope': GitHubOAuthConfig.scope,
-      'state': _generateState(),
-    });
-
-    final result = await FlutterWebAuth2.authenticate(
-      url: authUrl.toString(),
-      callbackUrlScheme: GitHubOAuthConfig.callbackScheme,
+  /// Step 1: Start Device Flow - returns codes for user to enter
+  Future<DeviceFlowState> startDeviceFlow() async {
+    final response = await http.post(
+      Uri.https('github.com', '/login/device/code'),
+      headers: {'Accept': 'application/json'},
+      body: {
+        'client_id': GitHubOAuthConfig.clientId,
+        'scope': GitHubOAuthConfig.scope,
+      },
     );
 
-    final code = Uri.parse(result).queryParameters['code'];
-    if (code == null) {
-      throw AuthException('No authorization code received');
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to start device flow: ${response.body}');
     }
 
-    // Step 2: Exchange code for access token
-    final tokenResponse = await http.post(
+    final json = jsonDecode(response.body);
+
+    if (json['error'] != null) {
+      throw AuthException(json['error_description'] ?? json['error']);
+    }
+
+    return DeviceFlowState(
+      userCode: json['user_code'],
+      verificationUri: json['verification_uri'],
+      deviceCode: json['device_code'],
+      expiresIn: json['expires_in'],
+      interval: json['interval'] ?? 5,
+    );
+  }
+
+  /// Step 2: Poll for authorization completion
+  ///
+  /// Call this repeatedly until it returns a session or throws.
+  /// Respects the polling interval from GitHub.
+  Future<AuthSession?> pollForToken(DeviceFlowState state) async {
+    final response = await http.post(
       Uri.https('github.com', '/login/oauth/access_token'),
       headers: {'Accept': 'application/json'},
       body: {
         'client_id': GitHubOAuthConfig.clientId,
-        'client_secret': GitHubOAuthConfig.clientSecret,
-        'code': code,
-        'redirect_uri': GitHubOAuthConfig.redirectUri,
+        'device_code': state.deviceCode,
+        'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
       },
     );
 
-    if (tokenResponse.statusCode != 200) {
-      throw AuthException('Failed to exchange code for token');
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to poll for token');
     }
 
-    final tokenJson = jsonDecode(tokenResponse.body);
-    final accessToken = tokenJson['access_token'] as String?;
+    final json = jsonDecode(response.body);
+    final error = json['error'];
 
-    if (accessToken == null) {
-      final error = tokenJson['error_description'] ?? tokenJson['error'];
-      throw AuthException('Failed to get access token: $error');
+    if (error == 'authorization_pending') {
+      // User hasn't authorized yet - keep polling
+      return null;
+    } else if (error == 'slow_down') {
+      // We're polling too fast - wait longer next time
+      return null;
+    } else if (error == 'expired_token') {
+      throw AuthException('Authorization expired. Please try again.');
+    } else if (error == 'access_denied') {
+      throw AuthException('Authorization was denied.');
+    } else if (error != null) {
+      throw AuthException(json['error_description'] ?? error);
     }
 
-    // Step 3: Get user info
+    // Success! We have a token
+    final accessToken = json['access_token'] as String;
+
+    // Get user info
     final userResponse = await http.get(
       Uri.https('api.github.com', '/user'),
       headers: {
@@ -105,23 +156,44 @@ class AuthService {
 
     final user = GitHubUser.fromJson(jsonDecode(userResponse.body));
 
-    // Step 4: Save session
+    // Save session
     await _storage.write(key: _tokenKey, value: accessToken);
     await _storage.write(key: _userKey, value: jsonEncode(user.toJson()));
 
     return AuthSession(accessToken: accessToken, user: user);
   }
 
+  /// Convenience method: Complete device flow with polling loop
+  ///
+  /// [onStateReady] is called with the user code and URL to display
+  /// Returns the session when authorization completes
+  Future<AuthSession> loginWithDeviceFlow({
+    required void Function(DeviceFlowState state) onStateReady,
+    void Function()? onPoll,
+  }) async {
+    final state = await startDeviceFlow();
+    onStateReady(state);
+
+    final expiry = DateTime.now().add(Duration(seconds: state.expiresIn));
+
+    while (DateTime.now().isBefore(expiry)) {
+      await Future.delayed(Duration(seconds: state.interval));
+
+      onPoll?.call();
+
+      final session = await pollForToken(state);
+      if (session != null) {
+        return session;
+      }
+    }
+
+    throw AuthException('Authorization timed out. Please try again.');
+  }
+
   /// Clear the saved session
   Future<void> clearSession() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userKey);
-  }
-
-  /// Generate a random state for OAuth
-  String _generateState() {
-    final random = DateTime.now().millisecondsSinceEpoch.toString();
-    return base64Encode(utf8.encode(random)).substring(0, 16);
   }
 }
 

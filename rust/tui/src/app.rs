@@ -1,6 +1,35 @@
 //! Application state management
 
-use interactions_core::{InteractionKind, Member, Team, TeamConfig, TeamStorage};
+use interactions_core::{Interaction, InteractionKind, Member, Team, TeamConfig, TeamStorage};
+
+/// Sub-tabs for the Interactions tab
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InteractionsSubTab {
+    #[default]
+    Kudos,
+    Feedback,
+}
+
+impl InteractionsSubTab {
+    pub fn title(&self) -> &'static str {
+        match self {
+            Self::Kudos => "Kudos",
+            Self::Feedback => "Feedback",
+        }
+    }
+
+    pub fn all() -> &'static [InteractionsSubTab] {
+        &[InteractionsSubTab::Kudos, InteractionsSubTab::Feedback]
+    }
+}
+
+/// View mode for the Interactions tab (sent vs received)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InteractionsView {
+    #[default]
+    Sent,
+    Received,
+}
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
@@ -96,6 +125,82 @@ pub struct AddMemberState {
     pub step: AddMemberStep,
     pub email: String,
     pub name: String,
+    pub input_buffer: String,
+    pub error_message: Option<String>,
+}
+
+/// Kudos wizard step
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KudosStep {
+    #[default]
+    Recipient,
+    Note,
+    Share,
+}
+
+impl KudosStep {
+    pub fn prompt(&self) -> &'static str {
+        match self {
+            KudosStep::Recipient => "Who are you giving kudos to? (email or name)",
+            KudosStep::Note => "What would you like to say?",
+            KudosStep::Share => "Share with the team? (y/n)",
+        }
+    }
+
+    pub fn next(&self) -> Option<KudosStep> {
+        match self {
+            KudosStep::Recipient => Some(KudosStep::Note),
+            KudosStep::Note => Some(KudosStep::Share),
+            KudosStep::Share => None,
+        }
+    }
+}
+
+/// State for the kudos wizard
+#[derive(Debug, Clone, Default)]
+pub struct KudosState {
+    pub step: KudosStep,
+    pub recipient: String,
+    pub note: String,
+    pub shared: bool,
+    pub input_buffer: String,
+    pub error_message: Option<String>,
+}
+
+/// Feedback wizard step
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FeedbackStep {
+    #[default]
+    Recipient,
+    Note,
+    Share,
+}
+
+impl FeedbackStep {
+    pub fn prompt(&self) -> &'static str {
+        match self {
+            FeedbackStep::Recipient => "Who is this feedback for? (email or name)",
+            FeedbackStep::Note => "What feedback would you like to share?",
+            FeedbackStep::Share => "Share with the team? (y/n)",
+        }
+    }
+
+    pub fn next(&self) -> Option<FeedbackStep> {
+        match self {
+            FeedbackStep::Recipient => Some(FeedbackStep::Note),
+            FeedbackStep::Note => Some(FeedbackStep::Share),
+            FeedbackStep::Share => None,
+        }
+    }
+}
+
+/// State for the feedback wizard
+#[derive(Debug, Clone, Default)]
+pub struct FeedbackState {
+    pub step: FeedbackStep,
+    pub recipient: String,
+    pub note: String,
+    pub shared: bool,
     pub input_buffer: String,
     pub error_message: Option<String>,
 }
@@ -273,6 +378,36 @@ pub struct App {
 
     /// Directory navigation wizard state (Some when navigating)
     pub navigate_dir_state: Option<NavigateDirState>,
+
+    /// Kudos wizard state (Some when giving kudos)
+    pub kudos_state: Option<KudosState>,
+
+    /// Feedback wizard state (Some when giving feedback)
+    pub feedback_state: Option<FeedbackState>,
+
+    /// Current user email (for logging interactions)
+    pub current_user: Option<String>,
+
+    /// Current sub-tab in Interactions tab
+    pub interactions_subtab: InteractionsSubTab,
+
+    /// Current view in Interactions tab (sent vs received)
+    pub interactions_view: InteractionsView,
+
+    /// Loaded sent kudos
+    pub sent_kudos: Vec<Interaction>,
+
+    /// Loaded received kudos
+    pub received_kudos: Vec<Interaction>,
+
+    /// Loaded sent feedback
+    pub sent_feedback: Vec<Interaction>,
+
+    /// Loaded received feedback
+    pub received_feedback: Vec<Interaction>,
+
+    /// Selected interaction index in the current view
+    pub interaction_index: usize,
 }
 
 impl App {
@@ -288,6 +423,21 @@ impl App {
         let team = storage.load_team().ok().flatten();
         let is_initialized = storage.is_initialized();
 
+        // Get the current user from the first leader
+        let current_user = team.as_ref().and_then(|t| t.leaders.first().cloned());
+
+        // Load kudos and feedback
+        let sent_kudos = storage.load_sent_kudos().unwrap_or_default();
+        let received_kudos = current_user
+            .as_ref()
+            .and_then(|email| storage.load_received_kudos(email).ok())
+            .unwrap_or_default();
+        let sent_feedback = storage.load_sent_feedback().unwrap_or_default();
+        let received_feedback = current_user
+            .as_ref()
+            .and_then(|email| storage.load_received_feedback(email).ok())
+            .unwrap_or_default();
+
         let quick_actions = Self::build_quick_actions(is_initialized);
 
         Self {
@@ -301,6 +451,16 @@ impl App {
             init_state: None,
             add_member_state: None,
             navigate_dir_state: None,
+            kudos_state: None,
+            feedback_state: None,
+            current_user,
+            interactions_subtab: InteractionsSubTab::default(),
+            interactions_view: InteractionsView::default(),
+            sent_kudos,
+            received_kudos,
+            sent_feedback,
+            received_feedback,
+            interaction_index: 0,
         }
     }
 
@@ -415,10 +575,18 @@ impl App {
                         QuickActionKind::ChangeDirectory => {
                             self.start_navigate_dir();
                         }
-                        QuickActionKind::LogInteraction(_kind) => {
-                            self.status_message =
-                                Some("Interaction logging not yet implemented".to_string());
-                        }
+                        QuickActionKind::LogInteraction(kind) => match kind {
+                            InteractionKind::Appreciation => {
+                                self.start_kudos();
+                            }
+                            InteractionKind::Feedback => {
+                                self.start_feedback();
+                            }
+                            _ => {
+                                self.status_message =
+                                    Some("This interaction type not yet implemented".to_string());
+                            }
+                        },
                         QuickActionKind::ViewTeam => {
                             self.current_tab = Tab::Team;
                             self.selected_index = 0;
@@ -781,9 +949,239 @@ impl App {
         self.working_dir = new_dir.clone();
         self.storage = TeamStorage::new(&new_dir);
         self.team = self.storage.load_team().ok().flatten();
+        self.current_user = self.team.as_ref().and_then(|t| t.leaders.first().cloned());
         self.quick_actions = Self::build_quick_actions(self.storage.is_initialized());
         self.selected_index = 0;
+        self.reload_interactions();
         self.status_message = Some(format!("Opened: {}", new_dir.display()));
+    }
+
+    /// Start the kudos wizard
+    pub fn start_kudos(&mut self) {
+        if !self.is_initialized() {
+            self.status_message = Some("Initialize a team first to give kudos".to_string());
+            return;
+        }
+        self.kudos_state = Some(KudosState::default());
+        self.status_message = None;
+    }
+
+    /// Cancel the kudos wizard
+    pub fn cancel_kudos(&mut self) {
+        self.kudos_state = None;
+        self.status_message = Some("Kudos cancelled".to_string());
+    }
+
+    /// Check if currently in kudos mode
+    pub fn is_kudos_mode(&self) -> bool {
+        self.kudos_state.is_some()
+    }
+
+    /// Handle character input during kudos mode
+    pub fn kudos_input_char(&mut self, c: char) {
+        if let Some(state) = &mut self.kudos_state {
+            state.input_buffer.push(c);
+            state.error_message = None;
+        }
+    }
+
+    /// Handle backspace during kudos mode
+    pub fn kudos_input_backspace(&mut self) {
+        if let Some(state) = &mut self.kudos_state {
+            state.input_buffer.pop();
+        }
+    }
+
+    /// Submit the current kudos step
+    pub fn kudos_submit(&mut self) {
+        let should_complete = {
+            let Some(state) = &mut self.kudos_state else {
+                return;
+            };
+
+            let input = state.input_buffer.trim().to_string();
+
+            // Validate and store based on current step
+            match state.step {
+                KudosStep::Recipient => {
+                    if input.is_empty() {
+                        state.error_message = Some("Please enter a recipient".to_string());
+                        return;
+                    }
+                    state.recipient = input;
+                }
+                KudosStep::Note => {
+                    if input.is_empty() {
+                        state.error_message = Some("Please write a note".to_string());
+                        return;
+                    }
+                    state.note = input;
+                }
+                KudosStep::Share => {
+                    let lower = input.to_lowercase();
+                    state.shared = lower == "y" || lower == "yes";
+                }
+            }
+
+            // Move to next step or complete
+            if let Some(next_step) = state.step.next() {
+                state.step = next_step;
+                state.input_buffer.clear();
+                false
+            } else {
+                true
+            }
+        };
+
+        if should_complete {
+            self.complete_kudos();
+        }
+    }
+
+    /// Complete the kudos process
+    fn complete_kudos(&mut self) {
+        let Some(state) = self.kudos_state.take() else {
+            return;
+        };
+
+        let from = self
+            .current_user
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let mut interaction =
+            Interaction::appreciation(&from, vec![state.recipient.clone()], &state.note);
+
+        if state.shared {
+            interaction = interaction.shared();
+        }
+
+        match self.storage.save_kudos(&interaction) {
+            Ok(()) => {
+                let share_text = if state.shared { " (shared)" } else { "" };
+                self.status_message =
+                    Some(format!("Kudos sent to {}!{}", state.recipient, share_text));
+                self.reload_interactions();
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Error saving kudos: {}", e));
+            }
+        }
+    }
+
+    /// Start the feedback wizard
+    pub fn start_feedback(&mut self) {
+        if !self.is_initialized() {
+            self.status_message = Some("Initialize a team first to share feedback".to_string());
+            return;
+        }
+        self.feedback_state = Some(FeedbackState::default());
+        self.status_message = None;
+    }
+
+    /// Cancel the feedback wizard
+    pub fn cancel_feedback(&mut self) {
+        self.feedback_state = None;
+        self.status_message = Some("Feedback cancelled".to_string());
+    }
+
+    /// Check if currently in feedback mode
+    pub fn is_feedback_mode(&self) -> bool {
+        self.feedback_state.is_some()
+    }
+
+    /// Handle character input during feedback mode
+    pub fn feedback_input_char(&mut self, c: char) {
+        if let Some(state) = &mut self.feedback_state {
+            state.input_buffer.push(c);
+            state.error_message = None;
+        }
+    }
+
+    /// Handle backspace during feedback mode
+    pub fn feedback_input_backspace(&mut self) {
+        if let Some(state) = &mut self.feedback_state {
+            state.input_buffer.pop();
+        }
+    }
+
+    /// Submit the current feedback step
+    pub fn feedback_submit(&mut self) {
+        let should_complete = {
+            let Some(state) = &mut self.feedback_state else {
+                return;
+            };
+
+            let input = state.input_buffer.trim().to_string();
+
+            // Validate and store based on current step
+            match state.step {
+                FeedbackStep::Recipient => {
+                    if input.is_empty() {
+                        state.error_message = Some("Please enter a recipient".to_string());
+                        return;
+                    }
+                    state.recipient = input;
+                }
+                FeedbackStep::Note => {
+                    if input.is_empty() {
+                        state.error_message = Some("Please write your feedback".to_string());
+                        return;
+                    }
+                    state.note = input;
+                }
+                FeedbackStep::Share => {
+                    let lower = input.to_lowercase();
+                    state.shared = lower == "y" || lower == "yes";
+                }
+            }
+
+            // Move to next step or complete
+            if let Some(next_step) = state.step.next() {
+                state.step = next_step;
+                state.input_buffer.clear();
+                false
+            } else {
+                true
+            }
+        };
+
+        if should_complete {
+            self.complete_feedback();
+        }
+    }
+
+    /// Complete the feedback process
+    fn complete_feedback(&mut self) {
+        let Some(state) = self.feedback_state.take() else {
+            return;
+        };
+
+        let from = self
+            .current_user
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let mut interaction =
+            Interaction::feedback(&from, vec![state.recipient.clone()], &state.note);
+
+        if state.shared {
+            interaction = interaction.shared();
+        }
+
+        match self.storage.save_feedback(&interaction) {
+            Ok(()) => {
+                let share_text = if state.shared { " (shared)" } else { "" };
+                self.status_message = Some(format!(
+                    "Feedback sent to {}!{}",
+                    state.recipient, share_text
+                ));
+                self.reload_interactions();
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Error saving feedback: {}", e));
+            }
+        }
     }
 
     /// Get the maximum selectable index for the current tab
@@ -810,6 +1208,71 @@ impl App {
             .as_ref()
             .map(|t| t.name.as_str())
             .unwrap_or("No Team")
+    }
+
+    /// Reload all interactions from storage
+    pub fn reload_interactions(&mut self) {
+        self.sent_kudos = self.storage.load_sent_kudos().unwrap_or_default();
+        self.received_kudos = self
+            .current_user
+            .as_ref()
+            .and_then(|email| self.storage.load_received_kudos(email).ok())
+            .unwrap_or_default();
+        self.sent_feedback = self.storage.load_sent_feedback().unwrap_or_default();
+        self.received_feedback = self
+            .current_user
+            .as_ref()
+            .and_then(|email| self.storage.load_received_feedback(email).ok())
+            .unwrap_or_default();
+        self.interaction_index = 0;
+    }
+
+    /// Toggle between sent and received views
+    pub fn toggle_interactions_view(&mut self) {
+        self.interactions_view = match self.interactions_view {
+            InteractionsView::Sent => InteractionsView::Received,
+            InteractionsView::Received => InteractionsView::Sent,
+        };
+        self.interaction_index = 0;
+    }
+
+    /// Switch to next sub-tab
+    pub fn next_subtab(&mut self) {
+        self.interactions_subtab = match self.interactions_subtab {
+            InteractionsSubTab::Kudos => InteractionsSubTab::Feedback,
+            InteractionsSubTab::Feedback => InteractionsSubTab::Kudos,
+        };
+        self.interaction_index = 0;
+    }
+
+    /// Get the current interactions list based on sub-tab and view
+    pub fn current_interactions(&self) -> &[Interaction] {
+        match (self.interactions_subtab, self.interactions_view) {
+            (InteractionsSubTab::Kudos, InteractionsView::Sent) => &self.sent_kudos,
+            (InteractionsSubTab::Kudos, InteractionsView::Received) => &self.received_kudos,
+            (InteractionsSubTab::Feedback, InteractionsView::Sent) => &self.sent_feedback,
+            (InteractionsSubTab::Feedback, InteractionsView::Received) => &self.received_feedback,
+        }
+    }
+
+    /// Move to next interaction in the list
+    pub fn next_interaction(&mut self) {
+        let len = self.current_interactions().len();
+        if len > 0 {
+            self.interaction_index = (self.interaction_index + 1) % len;
+        }
+    }
+
+    /// Move to previous interaction in the list
+    pub fn previous_interaction(&mut self) {
+        let len = self.current_interactions().len();
+        if len > 0 {
+            self.interaction_index = if self.interaction_index == 0 {
+                len - 1
+            } else {
+                self.interaction_index - 1
+            };
+        }
     }
 
     /// Get the working directory as a display string

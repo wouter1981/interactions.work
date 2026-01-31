@@ -2,7 +2,7 @@
 //!
 //! Handles the .team/ and .personal/ directory structures.
 
-use crate::{auth::MemberCredentials, Error, Member, Result, Team, TeamConfig};
+use crate::{auth::MemberCredentials, Error, Interaction, Member, Result, Team, TeamConfig};
 use std::path::{Path, PathBuf};
 
 /// Paths for the team data storage
@@ -184,6 +184,234 @@ impl TeamStorage {
             Some(c) => Ok(c.verify(pincode)),
             None => Err(Error::CredentialsNotFound(email.to_string())),
         }
+    }
+
+    /// Get the path to the interactions directory (team or personal)
+    pub fn interactions_dir(&self, shared: bool) -> PathBuf {
+        if shared {
+            self.team_dir().join("team/interactions")
+        } else {
+            self.personal_dir().join("interactions")
+        }
+    }
+
+    /// Get the path to sent kudos (personal)
+    pub fn sent_kudos_dir(&self) -> PathBuf {
+        self.personal_dir().join("kudos/sent")
+    }
+
+    /// Get the path to received kudos for a member
+    pub fn received_kudos_dir(&self, email: &str) -> PathBuf {
+        self.member_dir(email).join("kudos")
+    }
+
+    /// Save an interaction
+    pub fn save_interaction(&self, interaction: &Interaction) -> Result<()> {
+        let dir = self.interactions_dir(interaction.shared);
+        std::fs::create_dir_all(&dir)?;
+
+        let filename = format!("{}.yaml", interaction.id);
+        let path = dir.join(filename);
+        let content = serde_yaml::to_string(interaction)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
+
+    /// Save a kudos interaction
+    /// - Always saves to sender's .personal/kudos/sent/
+    /// - Always saves to recipient's .team/members/{email}/kudos/
+    /// - If shared, also saves to .team/team/interactions/
+    pub fn save_kudos(&self, interaction: &Interaction) -> Result<()> {
+        let filename = format!("{}.yaml", interaction.id);
+        let content = serde_yaml::to_string(interaction)?;
+
+        // Save to sender's personal sent folder
+        let sent_dir = self.sent_kudos_dir();
+        std::fs::create_dir_all(&sent_dir)?;
+        std::fs::write(sent_dir.join(&filename), &content)?;
+
+        // Save to each recipient's kudos folder
+        for recipient in &interaction.with {
+            let received_dir = self.received_kudos_dir(recipient);
+            std::fs::create_dir_all(&received_dir)?;
+            std::fs::write(received_dir.join(&filename), &content)?;
+        }
+
+        // If shared, also save to team interactions
+        if interaction.shared {
+            let team_dir = self.interactions_dir(true);
+            std::fs::create_dir_all(&team_dir)?;
+            std::fs::write(team_dir.join(&filename), &content)?;
+        }
+
+        Ok(())
+    }
+
+    /// Load an interaction by ID
+    pub fn load_interaction(&self, id: &str, shared: bool) -> Result<Option<Interaction>> {
+        let path = self.interactions_dir(shared).join(format!("{}.yaml", id));
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let content = std::fs::read_to_string(&path)?;
+        let interaction: Interaction = serde_yaml::from_str(&content)?;
+        Ok(Some(interaction))
+    }
+
+    /// List all interactions (returns IDs)
+    pub fn list_interactions(&self, shared: bool) -> Result<Vec<String>> {
+        let dir = self.interactions_dir(shared);
+        if !dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut ids = vec![];
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            if let Some(name) = entry.file_name().to_str() {
+                if name.ends_with(".yaml") {
+                    ids.push(name.trim_end_matches(".yaml").to_string());
+                }
+            }
+        }
+        Ok(ids)
+    }
+
+    /// Load all sent kudos
+    pub fn load_sent_kudos(&self) -> Result<Vec<Interaction>> {
+        let dir = self.sent_kudos_dir();
+        if !dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut kudos = vec![];
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                let content = std::fs::read_to_string(&path)?;
+                if let Ok(interaction) = serde_yaml::from_str::<Interaction>(&content) {
+                    kudos.push(interaction);
+                }
+            }
+        }
+
+        // Sort by timestamp, newest first
+        kudos.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(kudos)
+    }
+
+    /// Load all received kudos for a member
+    pub fn load_received_kudos(&self, email: &str) -> Result<Vec<Interaction>> {
+        let dir = self.received_kudos_dir(email);
+        if !dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut kudos = vec![];
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                let content = std::fs::read_to_string(&path)?;
+                if let Ok(interaction) = serde_yaml::from_str::<Interaction>(&content) {
+                    kudos.push(interaction);
+                }
+            }
+        }
+
+        // Sort by timestamp, newest first
+        kudos.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(kudos)
+    }
+
+    /// Get the path to sent feedback (personal)
+    pub fn sent_feedback_dir(&self) -> PathBuf {
+        self.personal_dir().join("feedback/sent")
+    }
+
+    /// Get the path to received feedback for a member
+    pub fn received_feedback_dir(&self, email: &str) -> PathBuf {
+        self.member_dir(email).join("feedback")
+    }
+
+    /// Save a feedback interaction
+    /// - Always saves to sender's .personal/feedback/sent/
+    /// - Always saves to recipient's .team/members/{email}/feedback/
+    /// - If shared, also saves to .team/team/interactions/
+    pub fn save_feedback(&self, interaction: &Interaction) -> Result<()> {
+        let filename = format!("{}.yaml", interaction.id);
+        let content = serde_yaml::to_string(interaction)?;
+
+        // Save to sender's personal sent folder
+        let sent_dir = self.sent_feedback_dir();
+        std::fs::create_dir_all(&sent_dir)?;
+        std::fs::write(sent_dir.join(&filename), &content)?;
+
+        // Save to each recipient's feedback folder
+        for recipient in &interaction.with {
+            let received_dir = self.received_feedback_dir(recipient);
+            std::fs::create_dir_all(&received_dir)?;
+            std::fs::write(received_dir.join(&filename), &content)?;
+        }
+
+        // If shared, also save to team interactions
+        if interaction.shared {
+            let team_dir = self.interactions_dir(true);
+            std::fs::create_dir_all(&team_dir)?;
+            std::fs::write(team_dir.join(&filename), &content)?;
+        }
+
+        Ok(())
+    }
+
+    /// Load all sent feedback
+    pub fn load_sent_feedback(&self) -> Result<Vec<Interaction>> {
+        let dir = self.sent_feedback_dir();
+        if !dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut feedback = vec![];
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                let content = std::fs::read_to_string(&path)?;
+                if let Ok(interaction) = serde_yaml::from_str::<Interaction>(&content) {
+                    feedback.push(interaction);
+                }
+            }
+        }
+
+        // Sort by timestamp, newest first
+        feedback.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(feedback)
+    }
+
+    /// Load all received feedback for a member
+    pub fn load_received_feedback(&self, email: &str) -> Result<Vec<Interaction>> {
+        let dir = self.received_feedback_dir(email);
+        if !dir.exists() {
+            return Ok(vec![]);
+        }
+
+        let mut feedback = vec![];
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                let content = std::fs::read_to_string(&path)?;
+                if let Ok(interaction) = serde_yaml::from_str::<Interaction>(&content) {
+                    feedback.push(interaction);
+                }
+            }
+        }
+
+        // Sort by timestamp, newest first
+        feedback.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(feedback)
     }
 
     /// Initialize a new team with config, team info, and first member

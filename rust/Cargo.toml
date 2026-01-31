@@ -25,6 +25,7 @@ rand = "0.8"
 ratatui = "0.29"
 crossterm = "0.28"
 rpassword = "7"
+dirs = "5"
 
 # FFI bridge
 flutter_rust_bridge = "=2.0.0"

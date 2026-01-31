@@ -36,11 +36,13 @@ build_flutter() {
 
 run_tui() {
     echo -e "${BLUE}Launching TUI...${NC}"
+    cd "$SCRIPT_DIR"
     "$RUST_DIR/target/release/interactions"
 }
 
 run_flutter() {
     echo -e "${BLUE}Launching Flutter Desktop...${NC}"
+    cd "$SCRIPT_DIR"
     "$FLUTTER_DIR/build/linux/x64/release/bundle/interactions"
 }
 

@@ -1,7 +1,8 @@
 //! Application state management
 
 use interactions_core::{InteractionKind, Member, Team, TeamConfig, TeamStorage};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 /// The main tabs in the TUI
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -48,6 +49,7 @@ pub struct QuickAction {
 #[derive(Debug, Clone)]
 pub enum QuickActionKind {
     InitTeam,
+    ChangeDirectory,
     LogInteraction(InteractionKind),
     ViewTeam,
     ViewOkrs,
@@ -98,6 +100,113 @@ pub struct AddMemberState {
     pub error_message: Option<String>,
 }
 
+/// State for the directory navigation wizard
+#[derive(Debug, Clone)]
+pub struct NavigateDirState {
+    /// Current directory being browsed
+    pub current_dir: PathBuf,
+    /// List of entries in the current directory
+    pub entries: Vec<DirEntry>,
+    /// Selected entry index
+    pub selected_index: usize,
+    /// Error message if any
+    pub error_message: Option<String>,
+    /// Input buffer for manual path entry
+    pub input_buffer: String,
+    /// Whether in manual path input mode
+    pub input_mode: bool,
+}
+
+/// A directory entry for navigation
+#[derive(Debug, Clone)]
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub path: PathBuf,
+}
+
+impl NavigateDirState {
+    pub fn new(start_dir: &Path) -> Self {
+        let mut state = Self {
+            current_dir: start_dir.to_path_buf(),
+            entries: Vec::new(),
+            selected_index: 0,
+            error_message: None,
+            input_buffer: String::new(),
+            input_mode: false,
+        };
+        state.refresh_entries();
+        state
+    }
+
+    /// Refresh the directory entries list
+    pub fn refresh_entries(&mut self) {
+        self.entries.clear();
+        self.selected_index = 0;
+
+        // Add parent directory entry if not at root
+        if let Some(parent) = self.current_dir.parent() {
+            self.entries.push(DirEntry {
+                name: "..".to_string(),
+                is_dir: true,
+                path: parent.to_path_buf(),
+            });
+        }
+
+        // Read directory entries
+        if let Ok(read_dir) = fs::read_dir(&self.current_dir) {
+            let mut dirs: Vec<DirEntry> = Vec::new();
+
+            for entry in read_dir.flatten() {
+                let path = entry.path();
+                let is_dir = path.is_dir();
+                if let Some(name) = path.file_name() {
+                    let name = name.to_string_lossy().to_string();
+                    // Skip hidden files/directories (starting with .)
+                    if !name.starts_with('.') && is_dir {
+                        dirs.push(DirEntry { name, is_dir, path });
+                    }
+                }
+            }
+
+            // Sort directories alphabetically
+            dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+            self.entries.extend(dirs);
+        }
+    }
+
+    /// Navigate into the selected directory
+    pub fn enter_selected(&mut self) -> bool {
+        if let Some(entry) = self.entries.get(self.selected_index) {
+            if entry.is_dir {
+                self.current_dir = entry.path.clone();
+                self.refresh_entries();
+                self.error_message = None;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Move selection up
+    pub fn select_previous(&mut self) {
+        if !self.entries.is_empty() {
+            self.selected_index = if self.selected_index == 0 {
+                self.entries.len() - 1
+            } else {
+                self.selected_index - 1
+            };
+        }
+    }
+
+    /// Move selection down
+    pub fn select_next(&mut self) {
+        if !self.entries.is_empty() {
+            self.selected_index = (self.selected_index + 1) % self.entries.len();
+        }
+    }
+}
+
 impl InitStep {
     pub fn prompt(&self) -> &'static str {
         match self {
@@ -141,6 +250,9 @@ pub struct App {
     /// Selected item index in the current view
     pub selected_index: usize,
 
+    /// Current working directory
+    pub working_dir: PathBuf,
+
     /// Team storage handler
     pub storage: TeamStorage,
 
@@ -158,13 +270,21 @@ pub struct App {
 
     /// Add member wizard state (Some when adding a member)
     pub add_member_state: Option<AddMemberState>,
+
+    /// Directory navigation wizard state (Some when navigating)
+    pub navigate_dir_state: Option<NavigateDirState>,
 }
 
 impl App {
     /// Create a new application state
     pub fn new() -> Self {
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let storage = TeamStorage::new(&cwd);
+        let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self::with_directory(cwd)
+    }
+
+    /// Create a new application state with a specific directory
+    pub fn with_directory(dir: PathBuf) -> Self {
+        let storage = TeamStorage::new(&dir);
         let team = storage.load_team().ok().flatten();
         let is_initialized = storage.is_initialized();
 
@@ -173,12 +293,14 @@ impl App {
         Self {
             current_tab: Tab::default(),
             selected_index: 0,
+            working_dir: dir,
             storage,
             team,
             quick_actions,
             status_message: None,
             init_state: None,
             add_member_state: None,
+            navigate_dir_state: None,
         }
     }
 
@@ -193,6 +315,13 @@ impl App {
                 kind: QuickActionKind::InitTeam,
             });
         }
+
+        // Always show change directory option
+        actions.push(QuickAction {
+            label: "Open Folder",
+            description: "Navigate to a different directory",
+            kind: QuickActionKind::ChangeDirectory,
+        });
 
         actions.extend(vec![
             QuickAction {
@@ -282,6 +411,9 @@ impl App {
                     match &action.kind {
                         QuickActionKind::InitTeam => {
                             self.start_init();
+                        }
+                        QuickActionKind::ChangeDirectory => {
+                            self.start_navigate_dir();
                         }
                         QuickActionKind::LogInteraction(_kind) => {
                             self.status_message =
@@ -556,6 +688,104 @@ impl App {
         self.status_message = Some(format!("Added {} to the team!", display_name));
     }
 
+    /// Start the directory navigation wizard
+    pub fn start_navigate_dir(&mut self) {
+        self.navigate_dir_state = Some(NavigateDirState::new(&self.working_dir));
+        self.status_message = None;
+    }
+
+    /// Cancel the directory navigation wizard
+    pub fn cancel_navigate_dir(&mut self) {
+        self.navigate_dir_state = None;
+    }
+
+    /// Check if currently in directory navigation mode
+    pub fn is_navigate_dir_mode(&self) -> bool {
+        self.navigate_dir_state.is_some()
+    }
+
+    /// Handle navigation input - move up
+    pub fn navigate_dir_previous(&mut self) {
+        if let Some(state) = &mut self.navigate_dir_state {
+            state.select_previous();
+        }
+    }
+
+    /// Handle navigation input - move down
+    pub fn navigate_dir_next(&mut self) {
+        if let Some(state) = &mut self.navigate_dir_state {
+            state.select_next();
+        }
+    }
+
+    /// Handle navigation input - enter directory or toggle input mode
+    pub fn navigate_dir_enter(&mut self) {
+        if let Some(state) = &mut self.navigate_dir_state {
+            if state.input_mode {
+                // Try to navigate to the entered path
+                let path = PathBuf::from(&state.input_buffer);
+                if path.is_dir() {
+                    state.current_dir = path;
+                    state.refresh_entries();
+                    state.input_buffer.clear();
+                    state.input_mode = false;
+                    state.error_message = None;
+                } else {
+                    state.error_message = Some("Invalid directory path".to_string());
+                }
+            } else {
+                state.enter_selected();
+            }
+        }
+    }
+
+    /// Toggle manual path input mode
+    pub fn navigate_dir_toggle_input(&mut self) {
+        if let Some(state) = &mut self.navigate_dir_state {
+            state.input_mode = !state.input_mode;
+            if state.input_mode {
+                state.input_buffer = state.current_dir.to_string_lossy().to_string();
+            }
+            state.error_message = None;
+        }
+    }
+
+    /// Handle character input during path entry
+    pub fn navigate_dir_input_char(&mut self, c: char) {
+        if let Some(state) = &mut self.navigate_dir_state {
+            if state.input_mode {
+                state.input_buffer.push(c);
+                state.error_message = None;
+            }
+        }
+    }
+
+    /// Handle backspace during path entry
+    pub fn navigate_dir_input_backspace(&mut self) {
+        if let Some(state) = &mut self.navigate_dir_state {
+            if state.input_mode {
+                state.input_buffer.pop();
+            }
+        }
+    }
+
+    /// Select the current directory and reload the app
+    pub fn navigate_dir_select(&mut self) {
+        let Some(state) = self.navigate_dir_state.take() else {
+            return;
+        };
+
+        let new_dir = state.current_dir.clone();
+
+        // Update to the new directory
+        self.working_dir = new_dir.clone();
+        self.storage = TeamStorage::new(&new_dir);
+        self.team = self.storage.load_team().ok().flatten();
+        self.quick_actions = Self::build_quick_actions(self.storage.is_initialized());
+        self.selected_index = 0;
+        self.status_message = Some(format!("Opened: {}", new_dir.display()));
+    }
+
     /// Get the maximum selectable index for the current tab
     fn max_index_for_tab(&self) -> usize {
         match self.current_tab {
@@ -580,6 +810,17 @@ impl App {
             .as_ref()
             .map(|t| t.name.as_str())
             .unwrap_or("No Team")
+    }
+
+    /// Get the working directory as a display string
+    pub fn working_dir_display(&self) -> String {
+        // Try to use home directory shorthand
+        if let Some(home) = dirs::home_dir() {
+            if let Ok(relative) = self.working_dir.strip_prefix(&home) {
+                return format!("~/{}", relative.display());
+            }
+        }
+        self.working_dir.display().to_string()
     }
 }
 

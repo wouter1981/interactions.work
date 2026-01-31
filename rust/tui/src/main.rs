@@ -247,6 +247,31 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         KeyCode::Char(c) => app.add_member_input_char(c),
                         _ => {}
                     }
+                } else if app.is_navigate_dir_mode() {
+                    // Handle directory navigation mode
+                    if let Some(state) = &app.navigate_dir_state {
+                        if state.input_mode {
+                            // In input mode, handle text entry
+                            match key.code {
+                                KeyCode::Esc => app.navigate_dir_toggle_input(),
+                                KeyCode::Enter => app.navigate_dir_enter(),
+                                KeyCode::Backspace => app.navigate_dir_input_backspace(),
+                                KeyCode::Char(c) => app.navigate_dir_input_char(c),
+                                _ => {}
+                            }
+                        } else {
+                            // In browse mode
+                            match key.code {
+                                KeyCode::Esc => app.cancel_navigate_dir(),
+                                KeyCode::Up | KeyCode::Char('k') => app.navigate_dir_previous(),
+                                KeyCode::Down | KeyCode::Char('j') => app.navigate_dir_next(),
+                                KeyCode::Enter => app.navigate_dir_enter(),
+                                KeyCode::Char('/') => app.navigate_dir_toggle_input(),
+                                KeyCode::Char(' ') => app.navigate_dir_select(),
+                                _ => {}
+                            }
+                        }
+                    }
                 } else {
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
@@ -260,6 +285,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             if app.team.is_some() {
                                 app.start_add_member();
                             }
+                        }
+                        KeyCode::Char('o') => {
+                            // Quick shortcut to open folder navigator
+                            app.start_navigate_dir();
                         }
                         _ => {}
                     }

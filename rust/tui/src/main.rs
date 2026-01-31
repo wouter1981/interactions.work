@@ -229,14 +229,40 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Tab => app.next_tab(),
-                    KeyCode::BackTab => app.previous_tab(),
-                    KeyCode::Up | KeyCode::Char('k') => app.previous_item(),
-                    KeyCode::Down | KeyCode::Char('j') => app.next_item(),
-                    KeyCode::Enter => app.select_item(),
-                    _ => {}
+                // Handle init mode separately
+                if app.is_init_mode() {
+                    match key.code {
+                        KeyCode::Esc => app.cancel_init(),
+                        KeyCode::Enter => app.init_submit(),
+                        KeyCode::Backspace => app.init_input_backspace(),
+                        KeyCode::Char(c) => app.init_input_char(c),
+                        _ => {}
+                    }
+                } else if app.is_add_member_mode() {
+                    // Handle add member mode
+                    match key.code {
+                        KeyCode::Esc => app.cancel_add_member(),
+                        KeyCode::Enter => app.add_member_submit(),
+                        KeyCode::Backspace => app.add_member_input_backspace(),
+                        KeyCode::Char(c) => app.add_member_input_char(c),
+                        _ => {}
+                    }
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                        KeyCode::Tab => app.next_tab(),
+                        KeyCode::BackTab => app.previous_tab(),
+                        KeyCode::Up | KeyCode::Char('k') => app.previous_item(),
+                        KeyCode::Down | KeyCode::Char('j') => app.next_item(),
+                        KeyCode::Enter => app.select_item(),
+                        KeyCode::Char('a') if app.current_tab == app::Tab::Team => {
+                            // Quick shortcut to add member when on Team tab
+                            if app.team.is_some() {
+                                app.start_add_member();
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
         }

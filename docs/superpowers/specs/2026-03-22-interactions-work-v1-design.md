@@ -41,12 +41,14 @@ This approach is chosen because:
 | Tier | Price | Features |
 |------|-------|----------|
 | **Free** | €0 forever | All core features, unlimited members, P2P encrypted sync |
-| **Pro** | €10/month flat per team | Cloud sync & backup, analytics & insights, priority support |
+| **Pro** | €10/month flat per team | Cloud sync & backup, analytics & insights, priority support (features rolled out incrementally post-launch) |
 | **Community** | €0 (Pro features) | For volunteer groups and community organizations |
 
 Pro pricing is per-team, not per-user. A team of 5 and a team of 50 pay the same €10/month.
 
 Community tier is Pro features at €0 for non-commercial groups. Team type (professional / community / volunteer) is set during team creation.
+
+**v1 Pro scope:** In v1, Pro unlocks the subscription flag and team type designation. Cloud sync, analytics, and other Pro-exclusive features are delivered incrementally in subsequent releases. Pro subscribers at launch get early-adopter pricing locked in and priority support. The v1 value proposition for Pro is supporting the project + getting cloud features as they ship.
 
 ## Data Model
 
@@ -157,7 +159,7 @@ Assignees update their own key result progress. Progress conflict resolution: hi
 - Private → stays on device, never syncs
 - Shared → syncs to all team members (read-only for others)
 
-A personal objective can exist without a team (someone setting personal goals before joining any team). When tied to a team, it can reference that team's manifesto values.
+In v1, personal objectives require a team context (`team_id` is required) so they can reference manifesto values. Team-less personal objectives (standalone goal-setting before joining a team) are deferred to a future release.
 
 ### PersonalKeyResult
 
@@ -235,15 +237,27 @@ That's the entire database. No content tables.
 
 ### Key Exchange
 
-When a member joins a team:
+**Team creation:**
+
+1. Team creator generates an asymmetric keypair (X25519) on-device
+2. Team creator generates the team's shared symmetric key (AES-256-GCM) and stores it locally
+3. Public key is registered with the relay server
+
+**When a new member joins:**
 
 1. New member generates an asymmetric keypair (X25519) on-device
 2. Public key is sent to the team via the relay (unencrypted — it's a public key)
-3. An existing team member (typically the inviter) encrypts the team's shared symmetric key (AES-256-GCM) with the new member's public key and sends it via the relay
+3. An existing team member (typically the inviter, who must be online) encrypts the team's shared symmetric key with the new member's public key and sends it via the relay
 4. New member decrypts the team key and stores it locally
 5. All subsequent messages are encrypted with the team's shared key
 
 For private interactions (visibility: private), the sender encrypts with the recipient's individual public key instead of the team key. Only the recipient can decrypt.
+
+**Key rotation on member removal (v1 limitation):**
+
+In v1, key rotation does NOT happen when a member is removed. The removed member retains the old team key and could theoretically decrypt messages sent before their removal. This is an accepted limitation for v1 — the attack surface is low because the removed member would also need access to the relay to intercept new envelopes, which requires a valid JWT they no longer have.
+
+Post-v1, key rotation on member removal should be implemented: generate a new team symmetric key, distribute it to all remaining members via their individual public keys, and mark old envelopes as using the previous key generation.
 
 ### Envelope Format
 
@@ -262,6 +276,8 @@ Every sync message is wrapped in an envelope:
 
 The server sees: envelope_id, team_id, sender_id, timestamp, recipients.
 The server cannot see: payload content.
+
+**Encryption rule:** When `recipients` is `"all"`, the payload is encrypted with the team's shared symmetric key (any team member can decrypt). When `recipients` is an array of member IDs, the payload is encrypted individually with each recipient's public key (only those specific members can decrypt). This maps directly to the visibility model: team-visible content uses the team key, private content uses individual keys.
 
 ### Payload Format (decrypted on device)
 

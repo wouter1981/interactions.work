@@ -1,0 +1,112 @@
+---
+// Invite link handler: interactions.work/join?code=ABCD1234
+// On mobile: shows invite code + app store links
+// On desktop: shows team name + QR code to scan
+// The code param is read client-side and resolved via the relay API.
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Join Team — interactions.work</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+	</head>
+	<body>
+		<div class="container">
+			<div class="card">
+				<a href="/" class="logo">interactions.work</a>
+				<h1 id="heading">Joining team...</h1>
+				<p id="subtitle" class="subtitle">Looking up your invite</p>
+
+				<!-- Desktop: QR code -->
+				<div id="qr-section" class="section" style="display: none;">
+					<div class="qr-box" id="qr-box"></div>
+					<p class="invite-code-display">Invite code: <strong id="invite-code"></strong></p>
+					<p class="note">Scan the QR code or enter the code in the app</p>
+				</div>
+
+				<!-- Mobile: download links -->
+				<div id="mobile-section" class="section" style="display: none;">
+					<div class="store-badges">
+						<a href="#" class="store-badge">App Store</a>
+						<a href="#" class="store-badge">Google Play</a>
+					</div>
+					<p class="invite-code-display">Your invite code: <strong id="invite-code-mobile"></strong></p>
+					<p class="note">Enter this code in the app after installing</p>
+				</div>
+
+				<!-- Error -->
+				<div id="error-section" class="section" style="display: none;">
+					<p class="error-text" id="error-text"></p>
+					<a href="/" class="back-link">Go to interactions.work</a>
+				</div>
+			</div>
+		</div>
+
+		<script is:inline>
+			const params = new URLSearchParams(window.location.search);
+			const code = params.get('code') || window.location.pathname.split('/').filter(Boolean).pop();
+			const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+			function show(id) { document.getElementById(id).style.display = 'block'; }
+
+			function showResult(teamName) {
+				document.getElementById('heading').textContent = 'Join "' + teamName + '"';
+				if (isMobile) {
+					document.getElementById('subtitle').textContent = 'Install the app and enter your invite code';
+					document.getElementById('invite-code-mobile').textContent = code;
+					show('mobile-section');
+				} else {
+					document.getElementById('subtitle').textContent = 'Scan the QR code with your phone to join';
+					document.getElementById('invite-code').textContent = code;
+					document.getElementById('qr-box').textContent = window.location.href;
+					show('qr-section');
+				}
+			}
+
+			function showError(msg) {
+				document.getElementById('heading').textContent = 'Invite not found';
+				document.getElementById('subtitle').textContent = '';
+				document.getElementById('error-text').textContent = msg;
+				show('error-section');
+			}
+
+			if (!code || code === 'join') {
+				showError('No invite code provided.');
+			} else {
+				const apiBase = window.location.hostname === 'localhost'
+					? 'http://localhost:3000' : 'https://api.interactions.work';
+				fetch(apiBase + '/teams/' + encodeURIComponent(code))
+					.then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+					.then(function(d) { showResult(d.name); })
+					.catch(function() { showResult('a team'); });
+			}
+		</script>
+	</body>
+</html>
+
+<style>
+	:root { --bg: #0a0a0f; --card: #12121a; --text: #e8e8ee; --muted: #8888a0; --accent: #e8a838; --border: #222233; }
+	* { margin: 0; padding: 0; box-sizing: border-box; }
+	body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+	.container { padding: 1.5rem; width: 100%; max-width: 460px; }
+	.card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 3rem 2rem; text-align: center; }
+	.logo { color: var(--accent); font-weight: 700; font-size: 0.9rem; text-decoration: none; display: block; margin-bottom: 2rem; }
+	h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+	.subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+	.section { margin-top: 1.5rem; }
+	.qr-box { margin: 1.5rem auto; padding: 2rem; border: 2px dashed var(--border); border-radius: 12px; color: var(--muted); font-size: 0.75rem; word-break: break-all; max-width: 250px; }
+	.invite-code-display { color: var(--muted); font-size: 0.9rem; margin-top: 1.5rem; }
+	.invite-code-display strong { color: var(--accent); font-size: 1.3rem; letter-spacing: 0.12em; }
+	.note { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
+	.store-badges { display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.5rem; }
+	.store-badge { padding: 0.8rem 1.5rem; border: 1px solid var(--border); border-radius: 8px; color: var(--text); text-decoration: none; font-size: 0.9rem; transition: border-color 0.2s; }
+	.store-badge:hover { border-color: var(--accent); }
+	.error-text { color: var(--muted); margin-bottom: 1.5rem; }
+	.back-link { color: var(--accent); text-decoration: none; }
+	.back-link:hover { text-decoration: underline; }
+</style>

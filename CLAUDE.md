@@ -4,7 +4,9 @@ This document provides guidance for AI assistants working with the interactions.
 
 ## Project Overview
 
-**interactions.work** is an open source application for personal and team development goals across organizations and communities. A team can be a sports team, a multi-organization collaboration, or an open source project. The focus is on **people and their interactions** - strengthening human relationships, improving collaboration, and developing soft skills.
+**interactions.work** is a mobile app for any group of humans to strengthen how they work together through shared values, appreciation, feedback, and goals. It serves professional teams, sports teams, volunteer groups, open source projects, and cross-organization collaborations equally.
+
+The app is device-first: data lives on the user's phone, synced between team members via end-to-end encrypted relay. The server never sees interaction content.
 
 ### Core Philosophy
 
@@ -12,79 +14,47 @@ This document provides guidance for AI assistants working with the interactions.
 - Don't hide from the hard parts: feedback, apologies, difficult conversations
 - Soft skills over hard metrics
 - Private by default, intentional sharing
+- The interactions are the product, not the team type
 
-## Core Concepts
+### Key Documents
 
-### Teams
-
-A team is flexible and user-defined:
-
-- **Name**: Team identifier
-- **Manifesto**: Behavior norms and cultural principles the team strives for
-- **Vision**: What the team aims to achieve
-- **Leaders**: Set the purpose and maintain the manifesto
-- **Members**: Join and commit to following the manifesto principles
-
-### Interactions
-
-Logged moments between people - a lightweight journal of meaningful exchanges:
-
-- **Structured**: Retrospectives, scheduled feedback sessions
-- **Ad-hoc**: Quick kudos, notes after calls, feedback requests
-- **Types**: Appreciation, feedback, apologies, check-ins
-
-### OKRs (Objectives & Key Results)
-
-Based on the OKR framework, tied to manifesto principles:
-
-- **Personal or Team** level
-- **Shared or Private** visibility
-- Progress measured through self-reflection, peer input, and linked interactions
-
-### Pulse
-
-Engagement system with regular prompts:
-
-- Friday morning updates
-- Sunday afternoon journaling
-- Interaction logging nudges
-- Feedback requests
-- (Patterns will evolve as the app grows)
+- **Intent:** `docs/intent/main.md` — why the app exists, core beliefs, market positioning
+- **Design Spec:** `docs/superpowers/specs/2026-03-22-interactions-work-v1-design.md` — full v1 specification
+- **Read intent before making architectural decisions.** When intent and implementation conflict, intent wins.
 
 ## Technology Stack
 
-| Component | Technology |
-|-----------|------------|
-| Mobile | Flutter with Material 3 (Android & iOS) |
-| TUI | Rust with Ratatui (PowerShell & Bash) |
-| Core Logic | Rust (shared via FFI with Flutter) |
-| Storage | Git-compatible (local, Google Drive, OneDrive) |
-| Data Format | YAML |
-| Platforms | GitHub, GitLab, pure Git |
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| iOS App | Swift / SwiftUI | Native, minimum iOS 17 |
+| Android App | Kotlin / Jetpack Compose | Native, minimum API 28 (Android 9) |
+| Relay Server | Rust (Axum) | Hetzner VPS, EU |
+| Database | PostgreSQL | Team registry, envelope queue |
+| Email | Resend | Transactional 6-digit verification codes |
+| Push | APNs (iOS) + FCM (Android) | Content-free notifications |
+| Marketing Website | Astro (static) | Cloudflare Pages |
 
-## Architecture: Rust Core as Single Source of Truth
+## Architecture: Protocol-Driven, Device-First
 
 ### Design Principle
 
-**All business logic lives in `rust/core/`.** Both the TUI and Flutter app consume this shared core:
+**Both native apps implement the same protocol specification independently.** There is no shared library or cross-platform framework. The design spec is the contract. Interoperability tests verify both implementations speak the same language.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      User Interfaces                         │
+│                      Native Apps                            │
 ├─────────────────────────────┬───────────────────────────────┤
-│     TUI (Rust/Ratatui)      │      Flutter (Dart)           │
-│     - Terminal interface    │      - Mobile UI              │
-│     - Direct Rust calls     │      - OAuth integrations     │
-│     - CI/CD headless mode   │      - Platform features      │
+│    iOS (Swift/SwiftUI)      │   Android (Kotlin/Compose)    │
+│    - Local SQLite           │   - Local Room (SQLite)       │
+│    - CryptoKit (E2E)        │   - Tink/libsodium (E2E)     │
+│    - Sync protocol client   │   - Sync protocol client     │
 ├─────────────────────────────┴───────────────────────────────┤
-│                    rust/ffi (FFI Bridge)                     │
-│              flutter_rust_bridge bindings                    │
+│              WebSocket (E2E encrypted envelopes)            │
 ├─────────────────────────────────────────────────────────────┤
-│                     rust/core (Business Logic)               │
-│     - Domain models (Team, Member, Interaction, OKR)        │
-│     - Authentication (Credentials, pincode hashing)          │
-│     - Storage operations (YAML, directory structure)         │
-│     - Validation and business rules                          │
+│              Relay Server (Rust/Axum, Hetzner EU)           │
+│    - Team registry (create/join/invite)                     │
+│    - E2E encrypted message relay (zero knowledge)           │
+│    - Auth (email + 6-digit code → JWT)                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,346 +62,199 @@ Engagement system with regular prompts:
 
 | Layer | Responsibility | Examples |
 |-------|----------------|----------|
-| **rust/core** | All business logic, models, validation | Team, Interaction, OKR models; pincode auth; YAML serialization |
-| **rust/ffi** | FFI-safe wrappers for Flutter | Exposes core types via flutter_rust_bridge |
-| **rust/tui** | Terminal UI only | Ratatui rendering, keyboard input, terminal state |
-| **flutter** | Mobile UI + platform integrations | Material 3 widgets, GitHub OAuth, secure storage |
+| **ios/** | iOS UI + platform integrations | SwiftUI views, CryptoKit encryption, APNs |
+| **android/** | Android UI + platform integrations | Compose UI, Tink encryption, FCM |
+| **server/** | Team registry, relay, auth | Axum routes, PostgreSQL, WebSocket relay |
+| **website/** | Marketing + invite handler | Astro pages, Cloudflare Worker for invites |
+| **docs/protocol/** | Wire format, sync spec | Envelope format, conflict resolution rules |
+| **tests/interop/** | Cross-platform verification | Encrypt/decrypt test vectors, sync scenarios |
 
-### Feature Parity Requirement
+### Protocol-Driven Development
 
-**Every feature must be available in both TUI and Flutter.** This ensures:
-- Users can choose their preferred interface
-- CI/CD can use headless TUI commands
-- Business logic is tested once in Rust core
+Both apps implement against the same spec. When adding a feature:
 
-| Feature | TUI | Flutter | Core Logic Location |
-|---------|-----|---------|---------------------|
-| Create team | ✓ | ✓ | `rust/core/src/storage/` |
-| Log interaction | ✓ | ✓ | `rust/core/src/models/interaction.rs` |
-| Manage OKRs | ✓ | ✓ | `rust/core/src/models/okr.rs` |
-| Pincode auth | ✓ | ✓ | `rust/core/src/auth.rs` |
-| GitHub OAuth | ✗ | ✓ | Flutter only (platform-specific) |
-| Publish markdown | ✓ | ✓ | `rust/core/` (TUI headless) |
+1. **Update the protocol spec** if it affects wire format or sync behavior
+2. **Implement in both apps independently** — same behavior, idiomatic code per platform
+3. **Run interop tests** to verify both implementations are compatible
+4. **Server changes are minimal** — the server is a relay, not a logic layer
+
+## Data Model
+
+| Entity | Key Fields | Sync Rule |
+|--------|------------|-----------|
+| **Team** | id, name, vision, invite_code | Always syncs to all members |
+| **ManifestoValue** | id, team_id, title, emoji | Always syncs (leaders write) |
+| **Member** | id, team_id, email, display_name, role | Always syncs (self writes) |
+| **Interaction** | id, kind (kudos/feedback), from, to[], message, value_id, visibility | Team → all; Private → recipient only |
+| **TeamObjective** | id, team_id, title, value_id, quarter, key_results[] | Always syncs (leaders create) |
+| **PersonalObjective** | id, owner, team_id, title, value_id, visibility, key_results[] | Shared → all; Private → never |
+
+Full model details in the design spec.
 
 ## Repository Structure
-
-### Codebase
 
 ```
 interactions.work/
 ├── CLAUDE.md
 ├── README.md
-├── check.sh                    # Run all checks, linting, and tests
-├── run.sh                      # Build and run TUI or Flutter Desktop
-├── flutter_rust_bridge.yaml    # FFI bridge configuration
-├── rust/                       # Rust workspace
-│   ├── core/                   # Shared business logic (THE source of truth)
-│   ├── ffi/                    # FFI bindings for Flutter
-│   ├── tui/                    # Terminal UI (Ratatui)
+├── docs/
+│   ├── intent/                # Business intent and core beliefs
+│   ├── protocol/              # Wire format, sync protocol spec
+│   ├── superpowers/specs/     # Design specifications
+│   └── legal/                 # Privacy policy, terms, GDPR docs
+├── ios/                       # Swift/SwiftUI app
+│   ├── InteractionsWork/
+│   └── InteractionsWork.xcodeproj
+├── android/                   # Kotlin/Compose app
+│   ├── app/
+│   └── build.gradle.kts
+├── server/                    # Rust relay server
+│   ├── src/
 │   └── Cargo.toml
-├── flutter/                    # Mobile app
-│   ├── lib/
-│   │   ├── src/rust/           # Dart models mirroring Rust core
-│   │   ├── models/             # Re-exports + Flutter-only models
-│   │   ├── providers/          # State management
-│   │   ├── screens/            # UI screens
-│   │   └── services/           # GitHub API, OAuth
-│   ├── android/
-│   ├── ios/
-│   └── pubspec.yaml
-└── docs/
+├── website/                   # Astro marketing site
+│   ├── src/
+│   └── astro.config.mjs
+└── tests/
+    └── interop/               # Cross-platform interoperability tests
 ```
 
-### Data Storage (.team folder)
+## Pricing
 
-```
-.team/
-├── config.yaml                 # Settings, publish locations, webhooks
-├── manifesto.yaml              # Team manifesto (source)
-├── vision.yaml                 # Team vision (source)
-├── members/
-│   └── {email}/
-│       ├── profile.yaml
-│       └── shared/             # Encrypted content user chose to share
-├── team/
-│   ├── okrs/                   # Team-level OKRs
-│   ├── interactions/           # Team interactions
-│   └── retrospectives/
-└── drafts/                     # Work in progress
-
-.personal/                      # Gitignored - local only
-├── settings.yaml
-├── okrs/                       # Private OKRs
-├── journal/                    # Personal journal
-└── drafts/
-```
-
-### Published Output (configurable)
-
-```
-/MANIFESTO.md                   # Published from .team/manifesto.yaml
-/VISION.md                      # Published from .team/vision.yaml
-/okrs/
-└── 2026-Q1.md                  # Published team OKRs
-```
-
-## Configuration
-
-### .team/config.yaml
-
-```yaml
-publish:
-  manifesto: /MANIFESTO.md
-  vision: /VISION.md
-  okrs: /okrs/
-
-webhooks:
-  discord: <webhook-url>
-  slack: <webhook-url>
-  signal: <config>
-
-linting:
-  enabled: true
-  target_branch: interactions
-
-backup:
-  protected_branch: main
-```
-
-## Git Workflow
-
-### Branches
-
-| Branch | Protection | Purpose |
-|--------|------------|---------|
-| `main` | Protected | Settings, published content, backups. Only maintainers. |
-| `interactions` | Unprotected | Day-to-day contributions via PRs/MRs |
-| Feature branches | None | Drafts and work in progress |
-
-### Workflow
-
-1. Contributors work on feature branches
-2. PRs/MRs target the `interactions` branch
-3. Linting validates `.team/` structure on PRs
-4. Maintainers publish content to `main` and generate markdown files
-5. Backups to protected branch triggered by maintainers
-
-## CLI Commands
-
-The TUI runs in both interactive and headless (CI/CD) modes:
-
-```bash
-# Interactive mode
-interactions              # Launch TUI
-
-# CI/CD commands
-interactions publish      # Generate markdown files from .team/ sources
-interactions lint         # Validate .team/ structure (for PR checks)
-interactions pulse        # Send reminders via configured webhooks
-interactions backup       # Backup to protected branch (maintainers)
-interactions restore <commit>  # Restore from git history
-```
+| Tier | Price | Notes |
+|------|-------|-------|
+| **Free** | €0 forever | All core features, unlimited members, P2P encrypted sync |
+| **Pro** | €10/month flat per team | Cloud sync & backup (rolling out post-launch) |
+| **Community** | €0 (Pro features) | Volunteer groups and community organizations |
 
 ## Privacy & Encryption
 
-| Location | In Repo? | Who Can Read? |
-|----------|----------|---------------|
-| `.personal/` | No (gitignored) | User only (local) |
-| `members/{email}/shared/` | Yes (encrypted) | User only (pincode-derived key) |
-| Team content | Yes (plain YAML) | Anyone with repo access |
+The server is deliberately dumb — zero knowledge of content:
 
-- Private data encrypted client-side with key derived from user's pincode (seeded hash)
-- `.personal/` never leaves the local machine
-- Sharing is an explicit action: content moves to `members/{email}/shared/` encrypted
+| What the server stores | Purpose |
+|------------------------|---------|
+| Email addresses | Auth + team membership |
+| Team ID + name | Registry + invite resolution |
+| Encrypted envelopes | Offline delivery (30-day TTL) |
+| Push tokens | Notification delivery |
+
+**The server NEVER sees:** interaction content, manifesto text, OKR details, who sent kudos to whom.
+
+- E2E encryption: X25519 key exchange + AES-256-GCM
+- Team-visible content encrypted with shared team key
+- Private content encrypted with recipient's individual public key (N separate envelopes for N recipients)
+- All infrastructure EU-hosted (Hetzner, Germany) — GDPR compliant
 
 ## Development Guidelines
 
 ### Branching Strategy
 
 - `main` - Stable releases
-- `develop` - Integration branch
 - `feature/*` - New features
 - `fix/*` - Bug fixes
 - `chore/*` - Maintenance tasks
 
 ### Code Style
 
-**Rust:**
+**Rust (server):**
 - Follow Rust 2021 edition idioms
 - Use `cargo fmt` before committing
 - Use `cargo clippy` for linting
 - Aim for zero warnings
 
-**Flutter/Dart:**
-- Follow official Dart style guide
-- Use `dart format` before committing
-- Use `dart analyze` for linting
-- Prefer composition over inheritance
+**Swift (iOS):**
+- Follow Swift API Design Guidelines
+- Use SwiftLint if configured
+- SwiftUI views should be small and composable
+
+**Kotlin (Android):**
+- Follow Kotlin coding conventions
+- Use ktlint or detekt if configured
+- Compose functions should be small and focused
+
+**Website (Astro):**
+- Follow Astro conventions
+- Minimal JavaScript — static by default
 
 ### Testing
 
-- Unit tests required for core logic
-- Integration tests for git operations
-- Widget tests for Flutter UI components
-- Aim for 80%+ coverage on core library
-
-```bash
-# Rust
-cargo test
-cargo test --workspace
-
-# Flutter
-flutter test
-flutter test --coverage
-```
+- Unit tests for business logic in each app
+- Integration tests for server API and WebSocket
+- Interoperability tests for cross-platform sync verification
+- Encryption tests with shared test vectors
 
 ### Commit Messages
 
 Follow Conventional Commits:
 
 ```
-feat: add pulse notification system
-fix: correct encryption key derivation
-docs: update CLAUDE.md with privacy section
-chore: update dependencies
+feat(ios): add kudos sending flow
+feat(android): add team manifesto editor
+feat(server): add member removal endpoint
+fix(server): handle expired JWT on WebSocket reconnect
+docs: update protocol spec for private envelope format
 ```
+
+Prefix with component when the change is platform-specific.
 
 ## AI Assistant Guidelines
 
 ### When Making Changes
 
-1. **Read before modifying** - Understand existing code first
-2. **Respect the domain** - This is about human interactions, not task management
-3. **Privacy first** - Never expose private data patterns
-4. **Keep it simple** - Soft skills don't need complex code
-5. **Test thoroughly** - Especially encryption and git operations
-6. **Run checks before committing** - Use `./check.sh` to verify all code
-
-### Verification Script
-
-**Always run `./check.sh` after making changes.** This script runs all checks, linting, and tests for both Rust and Flutter:
-
-```bash
-./check.sh              # Run all checks
-./check.sh --rust       # Rust only
-./check.sh --flutter    # Flutter only
-./check.sh --fix        # Auto-fix formatting issues
-```
-
-The script runs:
-- **Rust**: `cargo fmt --check`, `cargo check`, `cargo clippy`, `cargo test`
-- **Flutter**: `dart format --set-exit-if-changed`, `dart analyze`, `flutter test`
+1. **Read the intent document first** — understand why before changing what
+2. **Read the design spec** — the protocol is the contract between platforms
+3. **Respect the domain** — this is about human interactions, not task management
+4. **Privacy first** — never weaken encryption or expose private data
+5. **Keep it simple** — soft skills don't need complex code
+6. **Test encryption thoroughly** — private means private
 
 ### Implementing New Features
 
-**Always start in Rust core.** Follow this workflow:
-
-1. **Models & Logic → `rust/core/`**
-   - Add or modify domain models in `rust/core/src/models/`
-   - Add business logic, validation, storage operations
-   - Write tests in Rust (`cargo test`)
-
-2. **FFI Exposure → `rust/ffi/`**
-   - Add FFI-safe wrappers in `rust/ffi/src/api.rs`
-   - Expose new types and functions for Flutter
-
-3. **Dart Models → `flutter/lib/src/rust/`**
-   - Mirror the Rust types in `flutter/lib/src/rust/models.dart`
-   - Keep APIs identical (same method names, same behavior)
-   - Update exports in `flutter/lib/models/models.dart`
-
-4. **TUI Implementation → `rust/tui/`**
-   - Add UI for the feature in the terminal interface
-   - Use the core library directly
-
-5. **Flutter UI → `flutter/lib/`**
-   - Add screens, widgets, providers as needed
-   - Use the Dart models from `src/rust/`
-
-### Example: Adding a New Interaction Type
-
-```
-1. rust/core/src/models/interaction.rs
-   → Add new variant to InteractionKind enum
-   → Add factory method if needed
-   → Write tests
-
-2. rust/ffi/src/api.rs
-   → Update InteractionKind enum to include new variant
-   → Update conversion functions
-
-3. flutter/lib/src/rust/models.dart
-   → Add new variant to InteractionKind enum
-   → Add label() and yamlKey getter cases
-
-4. rust/tui/src/app.rs
-   → Add quick action for new interaction type
-
-5. flutter/lib/screens/
-   → Add UI for logging the new interaction type
-```
-
-### Flutter-Only Features
-
-Some features are platform-specific and belong only in Flutter:
-
-| Feature | Reason |
-|---------|--------|
-| GitHub/GitLab OAuth | Browser-based OAuth flow |
-| Secure token storage | Platform keychain APIs |
-| Push notifications | Firebase/APNs |
-| Biometric auth | Platform APIs |
-
-These do NOT need Rust core equivalents. The TUI uses pincode auth and local git credentials instead.
+1. **Check if it affects the protocol** — if it changes wire format or sync, update `docs/protocol/` first
+2. **Implement in the target platform** — iOS or Android, using idiomatic patterns
+3. **Mirror in the other platform** — same behavior, different code
+4. **Update server if needed** — relay changes are rare; most features are client-side
+5. **Add interop test vectors** — verify both platforms handle the same data identically
 
 ### Key Principles
 
-- The manifesto is sacred - it defines team culture
-- Interactions are personal - treat logged moments with care
-- Encryption must be correct - private means private
-- Git is the backend - respect the branching workflow
-- **Rust core is the source of truth** - all data models and logic start there
+- The manifesto is sacred — it defines team culture
+- Interactions are append-only — once sent, they cannot be modified
+- Encryption must be correct — private means private
+- The server is a relay, not a brain — keep it dumb
+- Both apps must speak the same protocol — interop tests prove it
 
 ### Things to Avoid
 
-- Don't leak private content patterns to shared spaces
-- Don't skip encryption for "convenience"
-- Don't commit directly to `main` or `interactions` branches
-- Don't add hard metric tracking - this is about soft skills
-- Don't over-engineer - keep the focus on human connection
-- **Don't implement business logic in Flutter only** - it must be in Rust core
-- **Don't add Dart models without Rust equivalents** - keep them in sync
-- **Don't skip TUI support** - every feature needs both interfaces
+- Don't weaken E2E encryption for convenience
+- Don't store content on the server — it's a relay
+- Don't add hard metric tracking — this is about soft skills
+- Don't over-engineer — keep the focus on human connection
+- Don't break protocol compatibility between platforms
+- Don't add features without checking the design spec scope (v1 vs deferred)
 
 ## Quick Reference
 
 | Task | Command |
 |------|---------|
-| **All checks & tests** | `./check.sh` |
-| Build & run apps | `./run.sh` |
-| Run TUI | `interactions` |
-| Publish content | `interactions publish` |
-| Lint PR | `interactions lint` |
-| Send pulse | `interactions pulse` |
-| Backup | `interactions backup` |
-| Rust tests | `cargo test --workspace` |
-| Flutter tests | `flutter test` |
-| Format Rust | `cargo fmt` |
-| Format Dart | `dart format .` |
-| Check Rust | `cargo check --workspace` |
-| Clippy lint | `cargo clippy --workspace` |
-| Auto-fix formatting | `./check.sh --fix` |
+| **Server tests** | `cd server && cargo test` |
+| **Server check** | `cd server && cargo clippy` |
+| **Server format** | `cd server && cargo fmt` |
+| **Server run** | `cd server && cargo run` |
+| **iOS tests** | Xcode: ⌘U or `xcodebuild test` |
+| **Android tests** | `cd android && ./gradlew test` |
+| **Website dev** | `cd website && npm run dev` |
+| **Website build** | `cd website && npm run build` |
 
-## Model Locations Reference
+## REST API Reference
 
-| Model | Rust Core | Rust FFI | Dart |
-|-------|-----------|----------|------|
-| `Team` | `rust/core/src/models/team.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `TeamConfig` | `rust/core/src/models/config.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `Member` | `rust/core/src/models/member.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `Credentials` | `rust/core/src/auth.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `Interaction` | `rust/core/src/models/interaction.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `Objective` | `rust/core/src/models/okr.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `KeyResult` | `rust/core/src/models/okr.rs` | `rust/ffi/src/api.rs` | `flutter/lib/src/rust/models.dart` |
-| `GitHubUser` | N/A | N/A | `flutter/lib/models/github_user.dart` |
-| `GitHubRepository` | N/A | N/A | `flutter/lib/models/github_repository.dart` |
+```
+POST   /auth/send-code            — Send 6-digit verification code to email
+POST   /auth/verify                — Verify code → JWT
+POST   /teams                      — Register team
+GET    /teams/:invite_code         — Resolve invite → team name + ID
+POST   /teams/:id/join             — Join team
+DELETE /teams/:id/members/:email   — Remove member (leader only)
+POST   /push/register              — Register push token
+DELETE /account                    — GDPR erasure
+WS     /sync                       — E2E encrypted envelope relay
+```

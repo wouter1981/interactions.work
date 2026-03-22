@@ -192,23 +192,26 @@ A single Rust service (Axum framework) running on a Hetzner VPS in the EU. The s
 
 1. **Team registry** — create teams, resolve invite codes, manage membership
 2. **E2E encrypted message relay** — receive encrypted envelopes from one device, deliver to other team members via WebSocket
-3. **Authentication** — email magic link verification, JWT session tokens
+3. **Authentication** — email verification via 6-digit code, JWT session tokens
 
 The server is deliberately minimal. It never sees interaction content, manifesto text, OKR details, or any meaningful user data. All content is end-to-end encrypted on-device before being sent through the relay.
 
 ### REST API
 
 ```
-POST   /auth/magic-link       — Send verification email
-POST   /auth/verify            — Verify code, return JWT
+POST   /auth/send-code         — Send 6-digit verification code to email
+POST   /auth/verify            — Verify 6-digit code, return JWT
 POST   /teams                  — Register team ID + invite code
 GET    /teams/:invite_code     — Resolve invite → team name + ID
 POST   /teams/:id/join         — Register member email to team
+DELETE /teams/:id/members/:email — Remove member from team (leader only)
 POST   /push/register          — Register device for push notifications
 DELETE /account                — Delete all user data (GDPR erasure)
 ```
 
-All endpoints except `/auth/magic-link` and `/teams/:invite_code` require JWT authentication.
+All endpoints except `/auth/send-code` and `/teams/:invite_code` require JWT authentication.
+
+`DELETE /teams/:id/members/:email` requires the requesting user to have a `leader` role on the team. On removal, the member's JWT is invalidated for that team's WebSocket connections.
 
 ### WebSocket — /sync
 
@@ -277,7 +280,7 @@ Every sync message is wrapped in an envelope:
 The server sees: envelope_id, team_id, sender_id, timestamp, recipients.
 The server cannot see: payload content.
 
-**Encryption rule:** When `recipients` is `"all"`, the payload is encrypted with the team's shared symmetric key (any team member can decrypt). When `recipients` is an array of member IDs, the payload is encrypted individually with each recipient's public key (only those specific members can decrypt). This maps directly to the visibility model: team-visible content uses the team key, private content uses individual keys.
+**Encryption rule:** When `recipients` is `"all"`, the payload is encrypted with the team's shared symmetric key (any team member can decrypt) and sent as a single envelope. When content is private (specific recipients), the sender creates **N separate envelopes** — one per recipient, each encrypted with that recipient's individual public key. Each recipient only downloads their own envelope. This maps directly to the visibility model: team-visible content = one envelope with team key, private content = N envelopes with individual keys.
 
 ### Payload Format (decrypted on device)
 
@@ -344,7 +347,7 @@ The app is always usable. Sync happens when connectivity is available.
 A single invite link handles all scenarios:
 
 - **Mobile with app** → deep link opens the app, joins the team
-- **Mobile without app** → redirect to App Store / Play Store, deferred deep link joins after install
+- **Mobile without app** → redirect to App Store / Play Store. The redirect page shows the invite code prominently so the user can enter it manually after installing. Automated deferred deep links (Branch, Firebase) are deferred to a future release.
 - **Desktop** → interactions.work/join/:code shows team name + QR code to scan with phone
 
 ## Marketing Website

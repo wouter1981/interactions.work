@@ -42,6 +42,7 @@ CREATE TABLE envelope_queue (
     sender_id TEXT NOT NULL,
     recipient_id TEXT NOT NULL,
     encrypted_payload TEXT NOT NULL,
+    is_broadcast BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days')
 );

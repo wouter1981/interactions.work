@@ -1,18 +1,21 @@
-# Rust
-rust/target/
-**/*.rs.bk
+# Server
+server/target/
 
-# Flutter
-flutter/.dart_tool/
-flutter/.packages
-flutter/.pub-cache/
-flutter/.pub/
-flutter/build/
-flutter/.flutter-plugins
-flutter/.flutter-plugins-dependencies
-flutter/*.iml
-flutter/.metadata
-flutter/pubspec.lock
+# Website
+website/node_modules/
+website/dist/
+website/.astro/
+
+# iOS
+ios/build/
+ios/*.xcuserdata
+ios/DerivedData/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
 
 # IDE
 .idea/
@@ -25,5 +28,13 @@ flutter/pubspec.lock
 .DS_Store
 Thumbs.db
 
-# interactions.work
+# Environment
+.env
+.env.*
+!.env.example
+
+# Brainstorming sessions
+.superpowers/
+
+# Private data
 .personal/

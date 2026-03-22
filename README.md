@@ -1,10 +1,10 @@
 # interactions.work
 
-An open source application for personal and team development goals across organizations and communities.
+A mobile app for any group of humans to strengthen how they work together through shared values, appreciation, feedback, and goals.
 
-## Overview
+## What is this?
 
-**interactions.work** focuses on **people and their interactions** - strengthening human relationships, improving collaboration, and developing soft skills. A team can be a sports team, a multi-organization collaboration, or an open source project.
+**interactions.work** focuses on **people and their interactions** — not tasks, not metrics, not performance reviews. It serves any team that wants to be intentional about how they collaborate: dev teams, sports teams, volunteer groups, open source projects, and cross-organization collaborations.
 
 ### Philosophy
 
@@ -12,111 +12,121 @@ An open source application for personal and team development goals across organi
 - Don't hide from the hard parts: feedback, apologies, difficult conversations
 - Soft skills over hard metrics
 - Private by default, intentional sharing
+- The interactions are the product, not the team type
 
 ## Features
 
-### Teams
+### Team Manifesto & Vision
+Create a team with shared values. Not a document on a wall — each value is a living part of daily interactions that kudos and goals reference.
 
-Flexible, user-defined groups with:
-- **Manifesto**: Behavior norms and cultural principles
-- **Vision**: What the team aims to achieve
-- **Leaders & Members**: Collaborative structure with clear roles
+### Kudos & Appreciation
+Send kudos tied to your team's values: *"Thanks for showing Trust."* Quick, lightweight, positive.
 
-### Interactions
+### Feedback & Difficult Conversations
+Give constructive feedback when it matters. Private by default. The app makes honest conversations natural, not scary.
 
-Logged moments between people - a lightweight journal of meaningful exchanges:
-- Structured: Retrospectives, scheduled feedback sessions
-- Ad-hoc: Quick kudos, notes after calls, feedback requests
-- Types: Appreciation, feedback, apologies, check-ins
-
-### OKRs (Objectives & Key Results)
-
-Personal or team-level goals tied to manifesto principles:
-- Shared or private visibility
-- Progress measured through self-reflection and peer input
-
-### Pulse
-
-Engagement system with regular prompts for updates, journaling, and feedback requests.
+### Goals (OKRs)
+Set team objectives and personal growth goals — both linked to what your team values most. Track progress through self-reflection, not dashboards.
 
 ## Technology Stack
 
 | Component | Technology |
 |-----------|------------|
-| Mobile | Flutter with Material 3 (Android & iOS) |
-| TUI | Rust with Ratatui (PowerShell & Bash) |
-| Core Logic | Rust (shared via FFI with Flutter) |
-| Storage | Git-compatible (local, Google Drive, OneDrive) |
-| Data Format | YAML |
+| iOS App | Swift / SwiftUI |
+| Android App | Kotlin / Jetpack Compose |
+| Relay Server | Rust (Axum) |
+| Database | PostgreSQL |
+| Marketing Website | Astro |
+| Sync | E2E encrypted relay over WebSocket |
+| Hosting | Hetzner (EU) + Cloudflare Pages |
+
+## Architecture
+
+Device-first, protocol-driven. Both native apps implement the same protocol spec independently. The server is a relay — it never sees your data.
+
+```
+┌───────────────────────────────────────────────┐
+│              Native Mobile Apps               │
+├─────────────────────┬─────────────────────────┤
+│  iOS (SwiftUI)      │  Android (Compose)      │
+│  Local SQLite       │  Local Room (SQLite)    │
+│  CryptoKit (E2E)    │  Tink (E2E)             │
+├─────────────────────┴─────────────────────────┤
+│         WebSocket (E2E encrypted)             │
+├───────────────────────────────────────────────┤
+│         Relay Server (Rust/Axum)              │
+│  Team registry · Message relay · Auth         │
+│  Zero knowledge of content                   │
+└───────────────────────────────────────────────┘
+```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Rust (latest stable)
-- Flutter SDK
-- Git
+- Docker (for PostgreSQL)
+- Rust (latest stable) — for the relay server
+- Node.js 18+ — for the marketing website
+- Xcode 15+ — for iOS app
+- Android Studio — for Android app
 
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/wouter1981/interactions.work.git
-cd interactions.work
-
-# Build the Rust core and TUI
-cd rust
-cargo build --release
-
-# Build the Flutter app
-cd ../flutter
-flutter pub get
-flutter build
-```
-
-### Usage
+### Run the Server
 
 ```bash
-# Launch interactive TUI
-interactions
+# Start PostgreSQL
+docker-compose up -d
 
-# CI/CD commands
-interactions publish      # Generate markdown files
-interactions lint         # Validate .team/ structure
-interactions pulse        # Send reminders via webhooks
-interactions backup       # Backup to protected branch
+# Run the relay server
+cd server
+cp .env.example .env
+cargo run
 ```
 
-## Project Structure
+The server starts on `http://localhost:3000`. In dev mode, verification codes are logged to the console instead of being emailed.
+
+### Run the Website
+
+```bash
+cd website
+npm install
+npm run dev
+```
+
+### Project Structure
 
 ```
 interactions.work/
-├── rust/                       # Rust core library + TUI
-│   ├── core/                   # Shared business logic
-│   └── tui/                    # Terminal UI (Ratatui)
-├── flutter/                    # Mobile app
-│   ├── lib/
-│   ├── android/
-│   └── ios/
+├── server/           # Rust relay server (Axum)
+├── website/          # Astro marketing site
+├── ios/              # Swift/SwiftUI app (planned)
+├── android/          # Kotlin/Compose app (planned)
+├── tests/interop/    # Cross-platform test vectors
 └── docs/
+    ├── intent/       # Why the app exists
+    ├── protocol/     # Wire format spec
+    └── superpowers/  # Design specs and plans
 ```
+
+## Pricing
+
+| Tier | Price | Description |
+|------|-------|-------------|
+| **Free** | €0 forever | All features, unlimited members, encrypted P2P sync |
+| **Pro** | €10/month flat | Per team, cloud sync & backup (rolling out post-launch) |
+| **Community** | €0 | Pro features free for volunteer and community groups |
 
 ## Privacy
 
-- Private data encrypted client-side with user's pincode
-- `.personal/` folder never leaves the local machine
-- Sharing is an explicit action with encrypted storage
-- Team content is plain YAML for repo access transparency
+- **Device-first** — your data lives on your phone
+- **End-to-end encrypted** — we can't read your interactions
+- **EU hosted** — all infrastructure in Germany (Hetzner)
+- **GDPR compliant** — minimal data, full control, right to erasure
+- **Zero knowledge** — the server stores team IDs and emails, nothing else
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Start by reading the intent document at `docs/intent/main.md` and the design spec at `docs/superpowers/specs/`.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Links
-
-- [Documentation](docs/)
-- [Issues](https://github.com/wouter1981/interactions.work/issues)

@@ -27,6 +27,21 @@ pub async fn send_code(
         return Err(AppError::BadRequest("invalid email".into()));
     }
 
+    // Rate limit: max 1 code per 60 seconds per email
+    let recent = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM verification_codes WHERE email = $1 AND created_at > NOW() - INTERVAL '60 seconds')",
+    )
+    .bind(&email)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if recent {
+        return Err(AppError::BadRequest(
+            "please wait 60 seconds before requesting a new code".into(),
+        ));
+    }
+
     // Ensure user exists
     sqlx::query("INSERT INTO users (email) VALUES ($1) ON CONFLICT DO NOTHING")
         .bind(&email)

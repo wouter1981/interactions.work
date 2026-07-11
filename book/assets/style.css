@@ -1,0 +1,275 @@
+/* ============================================================
+   The Long Way Around — book stylesheet
+   Font: Inter (Google Fonts), loaded per page.
+   ============================================================ */
+
+:root {
+  --ink: #1f2430;
+  --ink-soft: #4a5163;
+  --paper: #fdfcf9;
+  --paper-raised: #ffffff;
+  --accent: #d9552e;
+  --accent-soft: #fbe9e2;
+  --line: #e4e1d8;
+  --story-bg: #f4f1ea;
+  --try-bg: #eaf2ec;
+  --try-edge: #3d7a4f;
+  --warn-bg: #fdf3e0;
+  --warn-edge: #c98a1b;
+  --note-bg: #e9eef6;
+  --note-edge: #3b5f8f;
+  --max-width: 46rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8e6e1;
+    --ink-soft: #b5b2aa;
+    --paper: #191b20;
+    --paper-raised: #22242b;
+    --accent: #e8703f;
+    --accent-soft: #3a2a22;
+    --line: #34363e;
+    --story-bg: #24262d;
+    --try-bg: #1f2b23;
+    --warn-bg: #2e2718;
+    --note-bg: #1f2530;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+
+main.book {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
+
+/* ---------- headings ---------- */
+
+h1, h2, h3, h4 {
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+}
+
+h1 { font-size: 2.4rem; margin: 0.5rem 0 1rem; }
+h2 { font-size: 1.6rem; margin: 3rem 0 1rem; }
+h3 { font-size: 1.25rem; margin: 2.25rem 0 0.75rem; }
+h4 { font-size: 1.05rem; margin: 1.75rem 0 0.5rem; }
+
+.chapter-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0;
+}
+
+.chapter-lede {
+  font-size: 1.25rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin: 0 0 2.5rem;
+}
+
+p { margin: 0 0 1.25rem; }
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+strong { font-weight: 650; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 3rem auto;
+  width: 40%;
+}
+
+ul, ol { margin: 0 0 1.25rem; padding-left: 1.4rem; }
+li { margin-bottom: 0.4rem; }
+
+/* ---------- callouts ---------- */
+
+.story, .try-this, .callout, .short-version {
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin: 2rem 0;
+}
+
+.story {
+  background: var(--story-bg);
+  border-left: 4px solid var(--accent);
+}
+.story .story-label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.try-this { background: var(--try-bg); border-left: 4px solid var(--try-edge); }
+.try-this .label,
+.callout .label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.try-this .label { color: var(--try-edge); }
+
+.callout.warn { background: var(--warn-bg); border-left: 4px solid var(--warn-edge); }
+.callout.warn .label { color: var(--warn-edge); }
+.callout.note { background: var(--note-bg); border-left: 4px solid var(--note-edge); }
+.callout.note .label { color: var(--note-edge); }
+
+.pullquote {
+  font-size: 1.35rem;
+  line-height: 1.5;
+  font-weight: 600;
+  border: none;
+  border-top: 3px solid var(--accent);
+  border-bottom: 3px solid var(--accent);
+  margin: 2.5rem 0;
+  padding: 1.25rem 0.25rem;
+  color: var(--ink);
+}
+
+.short-version {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+.short-version h2, .short-version h3 { margin-top: 0; }
+
+/* ---------- tables ---------- */
+
+.table-wrap { overflow-x: auto; margin: 2rem 0; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+caption {
+  caption-side: top;
+  text-align: left;
+  font-weight: 650;
+  padding-bottom: 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+th, td {
+  border: 1px solid var(--line);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--story-bg); font-weight: 650; }
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--story-bg) 45%, transparent); }
+
+/* ---------- figures ---------- */
+
+figure.diagram {
+  margin: 2.5rem 0;
+  padding: 1.5rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+figure.diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+figcaption {
+  margin-top: 1rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* ---------- chapter navigation ---------- */
+
+nav.chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.95rem;
+}
+nav.chapter-nav a { text-decoration: none; font-weight: 600; }
+nav.chapter-nav .toc-link { color: var(--ink-soft); }
+
+/* ---------- table of contents (index page) ---------- */
+
+.cover {
+  text-align: center;
+  padding: 4rem 0 3rem;
+}
+.cover h1 { font-size: 3rem; margin-bottom: 0.5rem; }
+.cover .subtitle { font-size: 1.3rem; color: var(--ink-soft); margin-bottom: 0.25rem; }
+.cover .author { font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+
+ol.toc {
+  list-style: none;
+  padding: 0;
+  margin: 2rem 0;
+}
+ol.toc li {
+  border-bottom: 1px solid var(--line);
+  margin: 0;
+}
+ol.toc a {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.9rem 0.5rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+ol.toc a:hover { background: var(--story-bg); }
+ol.toc .num {
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 2.2rem;
+  font-variant-numeric: tabular-nums;
+}
+ol.toc .part-label {
+  padding: 1.6rem 0.5rem 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+ol.toc .toc-sub {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+@media print {
+  body { font-size: 11pt; }
+  nav.chapter-nav { display: none; }
+}
